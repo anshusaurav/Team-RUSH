@@ -126,6 +126,25 @@ function weekLabel(iso: string): string {
   return `${mon} W${wNum}`;
 }
 
+/**
+ * Returns the latest transaction_date in the POS collection.
+ * Cached for 10 minutes so we don't query on every velocity request.
+ * Falls back to Date.now() if the collection is empty.
+ * This anchors all lookback windows to the dataset's own timeline rather
+ * than today's date — critical when synthetic data ends months ago.
+ */
+let _latestPosDate: Date | null = null;
+let _latestPosFetchedAt = 0;
+
+async function getLatestPosDate(): Promise<Date> {
+  const now = Date.now();
+  if (_latestPosDate && now - _latestPosFetchedAt < 10 * 60_000) return _latestPosDate;
+  const doc = await POS.findOne().sort({ transaction_date: -1 }).select('transaction_date').lean();
+  _latestPosDate     = doc?.transaction_date ? new Date(doc.transaction_date) : new Date();
+  _latestPosFetchedAt = now;
+  return _latestPosDate;
+}
+
 /** Run LSTM and return a numeric prediction (0–N units), or null on failure. */
 function runNet(normalizedWindow: number[]): number | null {
   if (!net) return null;
@@ -145,11 +164,13 @@ export async function getVelocityData(
 ): Promise<VelocityData | null> {
   if (!net || !modelMeta) return null;
 
-  const WINDOW = modelMeta.window;
-  const maxVal = modelMeta.sku_max[skuName] || 1;
+  const WINDOW  = modelMeta.window;
+  const maxVal  = modelMeta.sku_max[skuName] || 1;
 
-  // Pull last (WINDOW + 4) extra weeks so chart has context beyond the input window
-  const since = new Date(Date.now() - (WINDOW + 5) * 7 * 86_400_000);
+  // Anchor to the dataset's latest date (not today) so synthetic historical
+  // data is always within the lookback window regardless of deployment date
+  const anchor = await getLatestPosDate();
+  const since  = new Date(anchor.getTime() - (WINDOW + 5) * 7 * 86_400_000);
   const posDocs = await POS.find({
     retailer_id:      retailerId,
     sku_name:         skuName,
@@ -228,8 +249,9 @@ export async function getVelocityData(
 
 export async function getTopSkuForRetailer(retailerId: string): Promise<string | null> {
   if (!modelMeta) return null;
-  const since = new Date(Date.now() - 4 * 7 * 86_400_000);
-  const agg   = await POS.aggregate([
+  const anchor = await getLatestPosDate();
+  const since  = new Date(anchor.getTime() - 4 * 7 * 86_400_000);
+  const agg    = await POS.aggregate([
     { $match: { retailer_id: retailerId, transaction_date: { $gte: since }, sku_name: { $in: modelMeta.products } } },
     { $group: { _id: '$sku_name', total: { $sum: '$sku_qty' } } },
     { $sort: { total: -1 } },
@@ -243,7 +265,8 @@ export async function getTopSkuForRetailer(retailerId: string): Promise<string |
 export async function detectBrainAnomalies(): Promise<object[]> {
   if (!net || !modelMeta) return [];
 
-  const since = new Date(Date.now() - (modelMeta.window + 5) * 7 * 86_400_000);
+  const anchor = await getLatestPosDate();
+  const since  = new Date(anchor.getTime() - (modelMeta.window + 5) * 7 * 86_400_000);
 
   // All retailer+SKU combos with recent sales
   const combos = await POS.aggregate([
