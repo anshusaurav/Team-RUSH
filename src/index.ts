@@ -14,9 +14,11 @@ import anomaliesRouter from './routes/anomalies';
 import outcomesRouter from './routes/outcomes';
 import weatherRouter from './routes/weather';
 import rfRecommendationRouter from './routes/rfRecommendation';
+import brainAnomaliesRouter   from './routes/brainAnomalies';
 import { prefetchAllDistrictWeather } from './services/weatherService';
 import { DISTRICT_COORDS } from './data/districtCoords';
-import { loadModel } from './services/rfAdvisor';
+import { loadModel }       from './services/rfAdvisor';
+import { loadBrainModel }  from './services/brainAdvisor';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -40,6 +42,7 @@ app.use('/api/anomalies', anomaliesRouter);
 app.use('/api/outcomes', outcomesRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/rf-recommendation', rfRecommendationRouter);
+app.use('/api/brain-anomalies',   brainAnomaliesRouter);
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -77,6 +80,9 @@ async function start() {
 
   // Load pre-trained RF model from JSON (instant — no training at runtime)
   loadModel();
+
+  // Load pre-trained Brain.js LSTM from JSON (instant — no training at runtime)
+  loadBrainModel();
 }
 
 start().catch((err) => {

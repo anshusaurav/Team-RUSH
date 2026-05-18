@@ -1,6 +1,14 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export type AnomalyType = 'stock_out' | 'demand_spike' | 'low_inventory' | 'visit_gap';
+export type AnomalyType =
+  | 'stock_out'
+  | 'demand_spike'
+  | 'low_inventory'
+  | 'visit_gap'
+  | 'digital_intent'
+  | 'weather_alert'
+  | 'brain_demand_spike'
+  | 'brain_stockout_risk';
 export type SeverityType = 'high' | 'medium' | 'low';
 
 export interface IAnomalyFlag extends Document {
@@ -17,7 +25,14 @@ export interface IAnomalyFlag extends Document {
 const AnomalyFlagSchema = new Schema<IAnomalyFlag>({
   retailer_id: { type: String, required: true, index: true },
   territory_id: { type: String, required: true, index: true },
-  anomaly_type: { type: String, enum: ['stock_out', 'demand_spike', 'low_inventory', 'visit_gap'] },
+  anomaly_type: {
+    type: String,
+    enum: [
+      'stock_out', 'demand_spike', 'low_inventory', 'visit_gap',
+      'digital_intent', 'weather_alert',
+      'brain_demand_spike', 'brain_stockout_risk',
+    ],
+  },
   sku_name: String,
   severity: { type: String, enum: ['high', 'medium', 'low'] },
   description: String,

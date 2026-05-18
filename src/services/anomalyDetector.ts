@@ -1,4 +1,5 @@
 import Inventory from '../models/Inventory';
+import { detectBrainAnomalies } from './brainAdvisor';
 import POS from '../models/POS';
 import Retailer from '../models/Retailer';
 import VisitLog from '../models/VisitLog';
@@ -243,15 +244,16 @@ export async function runAnomalyDetection(): Promise<{ inserted: number; cleared
 
   const latestWeek = await getLatestWeekDate();
 
-  const [stockOutFlags, spikeFlags, gapFlags, intentFlags, weatherFlags] = await Promise.all([
+  const [stockOutFlags, spikeFlags, gapFlags, intentFlags, weatherFlags, brainFlags] = await Promise.all([
     latestWeek ? detectStockOuts(latestWeek) : [],
     detectDemandSpikes(),
     detectVisitGaps(),
     detectDigitalIntent(),
     detectWeatherAlerts(),
+    detectBrainAnomalies(),
   ]);
 
-  const allFlags = [...stockOutFlags, ...spikeFlags, ...gapFlags, ...intentFlags, ...weatherFlags];
+  const allFlags = [...stockOutFlags, ...spikeFlags, ...gapFlags, ...intentFlags, ...weatherFlags, ...brainFlags];
 
   if (allFlags.length > 0) {
     await AnomalyFlag.insertMany(allFlags, { ordered: false }).catch(() => {});
@@ -259,7 +261,8 @@ export async function runAnomalyDetection(): Promise<{ inserted: number; cleared
 
   console.log(
     `Anomaly detection: ${stockOutFlags.length} stock-outs, ${spikeFlags.length} demand spikes, ` +
-    `${gapFlags.length} visit gaps, ${intentFlags.length} digital intent, ${weatherFlags.length} weather alerts`
+    `${gapFlags.length} visit gaps, ${intentFlags.length} digital intent, ` +
+    `${weatherFlags.length} weather alerts, ${brainFlags.length} ML (Brain.js)`
   );
 
   return { inserted: allFlags.length, cleared: clearResult.deletedCount };
