@@ -12,10 +12,26 @@ import { getWeatherForDistrict } from './weatherService';
 
 export type AIProvider = 'claude' | 'gemini';
 
-// ─── Provider clients ────────────────────────────────────────────────────────
+// ─── Provider clients (lazy — instantiated on first use so missing keys don't crash startup) ──
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+let _anthropic: Anthropic | null = null;
+let _gemini: GoogleGenerativeAI | null = null;
+
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY env var is not set');
+    _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return _anthropic;
+}
+
+function getGemini(): GoogleGenerativeAI {
+  if (!_gemini) {
+    if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY env var is not set');
+    _gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  }
+  return _gemini;
+}
 
 function getActiveProvider(override?: AIProvider): AIProvider {
   const provider = override || (process.env.AI_PROVIDER as AIProvider) || 'gemini';
@@ -32,7 +48,7 @@ async function callAI(
   provider: AIProvider
 ): Promise<string> {
   if (provider === 'claude') {
-    const response = await anthropic.messages.create({
+    const response = await getAnthropic().messages.create({
       model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
       max_tokens: maxTokens,
       system: systemPrompt,
@@ -41,7 +57,7 @@ async function callAI(
     return (response.content[0] as { text: string }).text;
   }
 
-  const model = geminiClient.getGenerativeModel({
+  const model = getGemini().getGenerativeModel({
     model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
     systemInstruction: systemPrompt,
   });
