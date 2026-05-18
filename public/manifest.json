@@ -1,0 +1,26 @@
+{
+  "name": "Syngenta Field Co-Pilot",
+  "short_name": "Field Co-Pilot",
+  "description": "AI-Guided Field Force Intelligence for Syngenta sales representatives",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#15803d",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "lang": "en-IN"
+}
