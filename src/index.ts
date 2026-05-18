@@ -13,8 +13,10 @@ import nextBestActionRouter from './routes/nextBestAction';
 import anomaliesRouter from './routes/anomalies';
 import outcomesRouter from './routes/outcomes';
 import weatherRouter from './routes/weather';
+import rfRecommendationRouter from './routes/rfRecommendation';
 import { prefetchAllDistrictWeather } from './services/weatherService';
 import { DISTRICT_COORDS } from './data/districtCoords';
+import { loadModel } from './services/rfAdvisor';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,6 +39,7 @@ app.use('/api/next-best-action', nextBestActionRouter);
 app.use('/api/anomalies', anomaliesRouter);
 app.use('/api/outcomes', outcomesRouter);
 app.use('/api/weather', weatherRouter);
+app.use('/api/rf-recommendation', rfRecommendationRouter);
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -71,6 +74,9 @@ async function start() {
   runAnomalyDetection()
     .then((r) => console.log(`[STARTUP] ${r.inserted} anomalies loaded`))
     .catch(console.error);
+
+  // Load pre-trained RF model from JSON (instant — no training at runtime)
+  loadModel();
 }
 
 start().catch((err) => {
