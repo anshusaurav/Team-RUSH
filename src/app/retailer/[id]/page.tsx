@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { getRetailer, getNextBestAction, logOutcome, RetailerDetail, NextBestAction, AIProvider } from '@/lib/api';
+import { getRetailer, getNextBestAction, logOutcome, RetailerDetail, NextBestAction } from '@/lib/api';
 import { MapPin, Package, TrendingUp, ChevronLeft, Sparkles, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
-import ProviderToggle from '@/components/ProviderToggle';
+import ReactMarkdown from 'react-markdown';
 import RFRecommendationCard from '@/components/RFRecommendationCard';
 
 export default function RetailerDetailPage() {
@@ -15,7 +15,6 @@ export default function RetailerDetailPage() {
 
   const [detail, setDetail] = useState<RetailerDetail | null>(null);
   const [advice, setAdvice] = useState<NextBestAction | null>(null);
-  const [provider, setProvider] = useState<AIProvider>('gemini');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [outcome, setOutcome] = useState('');
@@ -33,7 +32,7 @@ export default function RetailerDetailPage() {
     setAiLoading(true);
     setAiError('');
     try {
-      const result = await getNextBestAction(repId, id, provider);
+      const result = await getNextBestAction(repId, id, 'gemini');
       setAdvice(result);
       if (result.context_snapshot.currentInventory[0]) {
         setProduct(result.context_snapshot.currentInventory[0].sku_name);
@@ -142,11 +141,8 @@ export default function RetailerDetailPage() {
 
       {/* AI Recommendation */}
       <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 font-semibold text-green-800 text-sm">
-            <Sparkles size={15} /> AI Recommendation
-          </div>
-          <ProviderToggle value={provider} onChange={setProvider} />
+        <div className="flex items-center gap-2 font-semibold text-green-800 text-sm mb-3">
+          <Sparkles size={15} /> AI Next Best Action
         </div>
 
         {!advice && !aiLoading && (
@@ -160,7 +156,7 @@ export default function RetailerDetailPage() {
 
         {aiLoading && (
           <div className="flex items-center gap-2 text-green-700 text-sm animate-pulse py-2">
-            <Sparkles size={14} className="animate-spin" /> Analyzing data with {provider}...
+            <Sparkles size={14} className="animate-spin" /> Analyzing field data...
           </div>
         )}
 
@@ -168,13 +164,23 @@ export default function RetailerDetailPage() {
 
         {advice && (
           <div>
-            <div className="text-xs text-green-600 mb-2 font-medium">via {advice.provider_used}</div>
-            <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{advice.advice}</div>
+            <div className="prose prose-sm prose-green max-w-none
+              [&>h1]:text-base [&>h1]:font-bold [&>h1]:text-green-900 [&>h1]:mt-3 [&>h1]:mb-1
+              [&>h2]:text-sm [&>h2]:font-bold [&>h2]:text-green-900 [&>h2]:mt-3 [&>h2]:mb-1
+              [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:text-green-800 [&>h3]:mt-2 [&>h3]:mb-0.5
+              [&>p]:text-sm [&>p]:text-gray-800 [&>p]:leading-relaxed [&>p]:mb-2
+              [&>ul]:text-sm [&>ul]:text-gray-800 [&>ul]:space-y-1 [&>ul]:mb-2 [&>ul]:ml-4 [&>ul]:list-disc
+              [&>ol]:text-sm [&>ol]:text-gray-800 [&>ol]:space-y-1 [&>ol]:mb-2 [&>ol]:ml-4 [&>ol]:list-decimal
+              [&_strong]:text-gray-900 [&_strong]:font-semibold
+              [&_em]:text-green-700 [&_em]:not-italic [&_em]:font-medium
+              [&_hr]:border-green-200 [&_hr]:my-3">
+              <ReactMarkdown>{advice.advice}</ReactMarkdown>
+            </div>
             <button
               onClick={fetchAdvice}
               className="mt-3 text-xs text-green-600 underline"
             >
-              Regenerate with {provider}
+              Regenerate
             </button>
           </div>
         )}
