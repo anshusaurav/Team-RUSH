@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { getRetailer, getNextBestAction, logOutcome, RetailerDetail, NextBestAction } from '@/lib/api';
-import { MapPin, Package, TrendingUp, ChevronLeft, Sparkles, CheckCircle } from 'lucide-react';
+import { getRetailer, getNextBestAction, logOutcome, getVelocityData, RetailerDetail, NextBestAction, VelocityData } from '@/lib/api';
+import { MapPin, Package, TrendingUp, ChevronLeft, Sparkles, CheckCircle, Activity } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import RFRecommendationCard from '@/components/RFRecommendationCard';
+import VelocityChart from '@/components/VelocityChart';
 
 export default function RetailerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,9 +24,15 @@ export default function RetailerDetailPage() {
   const [logged, setLogged] = useState(false);
   const [logLoading, setLogLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(true);
+  const [velocity, setVelocity] = useState<VelocityData | null>(null);
+  const [velocityLoading, setVelocityLoading] = useState(true);
 
   useEffect(() => {
     getRetailer(id).then(setDetail).finally(() => setDetailLoading(false));
+    getVelocityData(id)
+      .then(setVelocity)
+      .catch(() => {})
+      .finally(() => setVelocityLoading(false));
   }, [id]);
 
   const fetchAdvice = async () => {
@@ -135,6 +142,24 @@ export default function RetailerDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ML Velocity Chart */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 font-semibold text-gray-700 text-sm mb-3">
+          <Activity size={15} className="text-purple-600" /> Sales Velocity · LSTM Forecast
+        </div>
+        {velocityLoading ? (
+          <div className="h-40 flex items-center justify-center text-xs text-gray-400 animate-pulse">
+            Loading LSTM forecast...
+          </div>
+        ) : velocity ? (
+          <VelocityChart data={velocity} />
+        ) : (
+          <p className="text-xs text-gray-400">
+            No LSTM model loaded — run <code className="bg-gray-100 px-1 rounded">node scripts/trainBrain.js</code> to generate forecasts.
+          </p>
+        )}
+      </div>
 
       {/* ML Model Recommendation */}
       <RFRecommendationCard retailerId={id} />

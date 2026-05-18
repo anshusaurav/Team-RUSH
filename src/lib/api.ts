@@ -67,12 +67,31 @@ export interface AnomalyFlag {
   _id: string;
   retailer_id: string;
   territory_id: string;
-  anomaly_type: 'stock_out' | 'demand_spike' | 'low_inventory' | 'visit_gap' | 'digital_intent' | 'weather_alert';
+  anomaly_type:
+    | 'stock_out' | 'demand_spike' | 'low_inventory' | 'visit_gap'
+    | 'digital_intent' | 'weather_alert'
+    | 'brain_demand_spike' | 'brain_stockout_risk';
   sku_name: string;
   severity: 'high' | 'medium' | 'low';
   description: string;
   detected_at: string;
   resolved: boolean;
+}
+
+export interface VelocityWeekPoint {
+  label:  string;
+  week:   string;
+  actual: number;
+}
+
+export interface VelocityData {
+  sku:              string;
+  weeks:            VelocityWeekPoint[];
+  predicted:        number;
+  current_qty:      number;
+  days_to_stockout: number | null;
+  anomaly_type:     'brain_demand_spike' | 'brain_stockout_risk' | null;
+  deviation:        number;
 }
 
 export interface RetailerDetail {
@@ -158,3 +177,9 @@ export const getRFRecommendation = (retailerId: string) =>
 
 export const getWeather = (district: string) =>
   api.get<{ success: boolean; weather: WeatherSummary }>('/api/weather', { params: { district } }).then(r => r.data.weather);
+
+export const getVelocityData = (retailerId: string, sku?: string) =>
+  api.get<VelocityData & { success: boolean }>(
+    '/api/brain-anomalies/velocity',
+    { params: { retailerId, ...(sku ? { sku } : {}) } }
+  ).then(r => r.data);

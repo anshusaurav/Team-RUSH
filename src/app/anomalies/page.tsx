@@ -17,12 +17,14 @@ const severityBadge: Record<string, string> = {
 };
 
 const typeLabel: Record<string, string> = {
-  stock_out: '📦 Stock Out',
-  demand_spike: '📈 Demand Spike',
-  low_inventory: '⚠ Low Inventory',
-  visit_gap: '🕐 Visit Gap',
-  digital_intent: '📱 Digital Intent',
-  weather_alert: '🌧 Weather Alert',
+  stock_out:           '📦 Stock Out',
+  demand_spike:        '📈 Demand Spike',
+  low_inventory:       '⚠ Low Inventory',
+  visit_gap:           '🕐 Visit Gap',
+  digital_intent:      '📱 Digital Intent',
+  weather_alert:       '🌧 Weather Alert',
+  brain_demand_spike:  '🧠 ML Demand Spike',
+  brain_stockout_risk: '🧠 ML Stockout Risk',
 };
 
 export default function AnomaliesPage() {
