@@ -5,16 +5,31 @@ import { VisitPlanItem, ScoreBreakdown } from '@/lib/api';
 import { MapPin, Clock, Package, TrendingUp, AlertTriangle, Leaf, Smartphone } from 'lucide-react';
 import { useLocale } from '@/lib/i18n/LocaleProvider';
 
-const priorityStyle: Record<string, string> = {
-  urgent: 'border-red-400 bg-red-50',
-  high: 'border-amber-400 bg-amber-50',
-  normal: 'border-gray-200 bg-white',
+// Subtle ring + soft top accent — no broken left ribbon, card stays white.
+const priorityCardStyle: Record<string, string> = {
+  urgent: 'border-gray-200 ring-1 ring-red-100',
+  high:   'border-gray-200 ring-1 ring-amber-100',
+  normal: 'border-gray-200',
+};
+
+// Thin top accent bar (1px); only rendered for urgent/high.
+const priorityAccent: Record<string, string> = {
+  urgent: 'bg-red-500',
+  high:   'bg-amber-400',
+  normal: '',
 };
 
 const priorityBadge: Record<string, string> = {
   urgent: 'bg-red-600 text-white',
-  high: 'bg-amber-500 text-white',
-  normal: 'bg-gray-200 text-gray-600',
+  high:   'bg-amber-500 text-white',
+  normal: 'bg-gray-100 text-gray-600 border border-gray-200',
+};
+
+// Rank badge tint — communicates priority at a glance from the leading number.
+const rankStyle: Record<string, string> = {
+  urgent: 'bg-red-100 text-red-700 ring-1 ring-red-200',
+  high:   'bg-amber-100 text-amber-700 ring-1 ring-amber-200',
+  normal: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',
 };
 
 function proximityClass(index: number): string {
@@ -71,12 +86,22 @@ export default function VisitPlanCard({
 
   return (
     <Link href={`/retailer/${item.retailer_id}?repId=${repId}`}>
-      <div className={`border-l-4 rounded-lg p-4 cursor-pointer shadow-sm hover:shadow-md transition-shadow ${priorityStyle[item.priority]}`}>
+      <div
+        className={`relative overflow-hidden bg-white border rounded-xl p-4 cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-px transition-all ${priorityCardStyle[item.priority]}`}
+      >
+        {/* Thin top accent bar (only for urgent/high) — sits flush with rounded corners. */}
+        {priorityAccent[item.priority] && (
+          <div className={`absolute inset-x-0 top-0 h-1 ${priorityAccent[item.priority]}`} />
+        )}
 
-        {/* Header row: rank + retailer ID + badges + score */}
+        {/* Header row: rank chip + retailer ID + badges + score */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3">
-            <span className="text-2xl font-bold text-gray-300 leading-none mt-0.5">#{rank}</span>
+            <span
+              className={`inline-flex items-center justify-center min-w-[2.25rem] h-9 px-2 rounded-lg font-bold text-sm leading-none shrink-0 ${rankStyle[item.priority]}`}
+            >
+              #{rank}
+            </span>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-gray-800">{item.retailer_id}</span>
