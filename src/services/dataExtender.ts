@@ -19,6 +19,7 @@
 import POS from '../models/POS';
 import Inventory from '../models/Inventory';
 import VisitLog from '../models/VisitLog';
+import VisitOutcome from '../models/VisitOutcome';
 import WhatsappLog from '../models/WhatsappLog';
 import RepTerritory from '../models/RepTerritory';
 import Retailer from '../models/Retailer';
@@ -635,6 +636,133 @@ async function extendDigitalFunnel(asOfYesterday: Date, cfg: ExtenderConfig): Pr
 }
 
 // --------------------------------------------------------------------------
+// VisitOutcome backfill (per-retailer history from per-tehsil visit_log)
+// --------------------------------------------------------------------------
+
+/**
+ * Backfills synthetic VisitOutcome rows from VisitLog history.
+ *
+ * Why: VisitLog has visit_tehsil but no retailer_id — the original CSVs never
+ * captured which specific retailers a rep called on inside a tehsil. Without
+ * retailer-level visit history, the prioritisation engine has to use the
+ * blunt "rep was in this tehsil X days ago" signal, which makes EVERY
+ * retailer in that tehsil look equally fresh.
+ *
+ * Strategy: for every (rep_id, visit_date) pair in VisitLog that does NOT
+ * already have a real VisitOutcome (real outcomes are user-entered via the
+ * app and we must never overwrite them), pick 1–2 retailers from that rep's
+ * territory in that visit's tehsil, weighted by sales velocity. Generate an
+ * outcome with realistic distribution (35% sale_made, 30% order_placed, 35%
+ * no_purchase) and synthetic notes.
+ *
+ * Idempotent: we skip (rep, date) pairs that already have any outcome row.
+ * On re-run we top-up new visit_log entries; we never touch existing data.
+ */
+async function backfillVisitOutcomes(cfg: ExtenderConfig): Promise<number> {
+  console.log('[Extend] VisitOutcome backfill: starting…');
+
+  // 1) Find (rep, date) pairs that already have outcomes — never touch them.
+  const existing = await VisitOutcome.aggregate<{ _id: { rep_id: string; date: string } }>([
+    {
+      $group: {
+        _id: {
+          rep_id: '$rep_id',
+          date: { $dateToString: { format: '%Y-%m-%d', date: '$visit_date' } },
+        },
+      },
+    },
+  ]);
+  const existingPairs = new Set<string>(
+    existing.map((e) => `${e._id.rep_id}|${e._id.date}`)
+  );
+
+  // 2) Pull all visit_log entries (rep, date, tehsil, product) — bounded by
+  //    the dataset's date range so we never invent outcomes after "yesterday".
+  const logs = await VisitLog.find({})
+    .select('rep_id visit_date visit_tehsil visit_type product_recommended territory_id')
+    .lean();
+
+  // 3) Build sampling pools per (territory, tehsil): retailers + their 30d sales
+  //    velocity (heavier weight on active retailers).
+  const retailers = await Retailer.find({})
+    .select('retailer_id territory_id tehsil')
+    .lean();
+  const pool = new Map<string, string[]>(); // key = `${territory_id}|${tehsil}` → retailer_ids
+  for (const r of retailers) {
+    const key = `${r.territory_id}|${r.tehsil}`;
+    if (!pool.has(key)) pool.set(key, []);
+    pool.get(key)!.push(r.retailer_id);
+  }
+
+  // 30-day velocity by retailer, used as a sampling weight
+  const since = addDays(dateOnly(new Date()), -30);
+  const vel = await POS.aggregate<{ _id: string; units: number }>([
+    { $match: { transaction_date: { $gte: since } } },
+    { $group: { _id: '$retailer_id', units: { $sum: '$sku_qty' } } },
+  ]);
+  const velMap = new Map<string, number>(vel.map((v) => [v._id, v.units]));
+
+  // 4) Generate outcomes
+  const out: Array<{
+    rep_id: string;
+    retailer_id: string;
+    visit_date: Date;
+    outcome: 'sale_made' | 'order_placed' | 'no_purchase';
+    product_discussed: string;
+    notes: string;
+    ai_recommendation_used: boolean;
+    created_at: Date;
+  }> = [];
+
+  for (const log of logs) {
+    const ds = log.visit_date.toISOString().slice(0, 10);
+    if (existingPairs.has(`${log.rep_id}|${ds}`)) continue;
+
+    const key = `${log.territory_id}|${log.visit_tehsil}`;
+    const candidates = pool.get(key);
+    if (!candidates || candidates.length === 0) continue;
+
+    // Weight retailers by their 30d velocity; floor at 1 so quiet retailers still appear
+    const weights = candidates.map((rid) => Math.max(1, velMap.get(rid) || 0));
+
+    // 1 outcome 70 % of visits, 2 outcomes 30 % — small retailers don't see 3 reps a day
+    const nOutcomes = Math.random() < 0.3 ? 2 : 1;
+    const picked = new Set<string>();
+    for (let i = 0; i < nOutcomes && picked.size < candidates.length; i++) {
+      let rid = pickWeighted(candidates, weights);
+      // Avoid the same retailer twice on the same visit
+      let safety = 0;
+      while (picked.has(rid) && safety++ < 8) rid = pickWeighted(candidates, weights);
+      if (picked.has(rid)) break;
+      picked.add(rid);
+
+      // Velocity-aware outcome distribution: high-velocity retailers more likely to convert
+      const v = velMap.get(rid) || 0;
+      const saleMadeProb = v > 50 ? 0.45 : v > 20 ? 0.35 : 0.25;
+      const orderProb    = v > 50 ? 0.30 : v > 20 ? 0.30 : 0.25;
+      const r = Math.random();
+      const outcome: 'sale_made' | 'order_placed' | 'no_purchase' =
+        r < saleMadeProb            ? 'sale_made'    :
+        r < saleMadeProb + orderProb ? 'order_placed' :
+                                       'no_purchase';
+
+      out.push({
+        rep_id: log.rep_id,
+        retailer_id: rid,
+        visit_date: log.visit_date,
+        outcome,
+        product_discussed: log.product_recommended || '',
+        notes: `[synthetic] ${log.visit_type || 'retailer meeting'} during ${log.visit_tehsil} sweep`,
+        ai_recommendation_used: false,
+        created_at: log.visit_date,
+      });
+    }
+  }
+
+  return await batchInsert(VisitOutcome, out, 'VisitOutcome', cfg.batchSize);
+}
+
+// --------------------------------------------------------------------------
 // Insertion helper
 // --------------------------------------------------------------------------
 
@@ -690,26 +818,38 @@ export async function extendDataToYesterday(): Promise<void> {
 
   const lastDate = dateOnly(latestPos.transaction_date);
   const gapDays = Math.floor((yesterday.getTime() - lastDate.getTime()) / 86400000);
-  if (gapDays <= 0) {
-    console.log('[Extend] Data already up-to-date');
-    return;
-  }
-
-  // Safety cap to avoid runaway generation
-  const cappedEnd = gapDays > cfg.maxDays ? addDays(lastDate, cfg.maxDays) : yesterday;
-  console.log(`[Extend] Extending data from ${lastDate.toISOString().slice(0, 10)} → ${cappedEnd.toISOString().slice(0, 10)} (${Math.min(gapDays, cfg.maxDays)} days)`);
 
   const t0 = Date.now();
+  let pos = 0, visits = 0, inv = 0, wa = 0, funnel = 0;
   try {
-    const [pos, visits, inv, wa, funnel] = await Promise.all([
-      extendPOS(cappedEnd, cfg),
-      extendVisitLogs(cappedEnd, cfg),
-      extendInventory(cappedEnd, cfg),
-      extendWhatsappLogs(cappedEnd, cfg),
-      extendDigitalFunnel(cappedEnd, cfg),
-    ]);
+    if (gapDays > 0) {
+      // Safety cap to avoid runaway generation
+      const cappedEnd = gapDays > cfg.maxDays ? addDays(lastDate, cfg.maxDays) : yesterday;
+      console.log(
+        `[Extend] Extending data from ${lastDate.toISOString().slice(0, 10)} → ` +
+        `${cappedEnd.toISOString().slice(0, 10)} (${Math.min(gapDays, cfg.maxDays)} days)`
+      );
+      [pos, visits, inv, wa, funnel] = await Promise.all([
+        extendPOS(cappedEnd, cfg),
+        extendVisitLogs(cappedEnd, cfg),
+        extendInventory(cappedEnd, cfg),
+        extendWhatsappLogs(cappedEnd, cfg),
+        extendDigitalFunnel(cappedEnd, cfg),
+      ]);
+    } else {
+      console.log('[Extend] POS / VisitLog / Inventory / WhatsApp / DigitalFunnel already up-to-date — skipping time-series extension');
+    }
+
+    // VisitOutcome backfill ALWAYS runs (idempotent — only writes for (rep, date)
+    // pairs that have no existing outcome). Runs even when other tables are
+    // current because it operates on the existing visit_log history.
+    const outcomes = await backfillVisitOutcomes(cfg);
+
     const dt = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`[Extend] Done in ${dt}s — POS ${pos}, VisitLog ${visits}, Inventory ${inv}, WhatsApp ${wa}, DigitalFunnel ${funnel}`);
+    console.log(
+      `[Extend] Done in ${dt}s — POS ${pos}, VisitLog ${visits}, Inventory ${inv}, ` +
+      `WhatsApp ${wa}, DigitalFunnel ${funnel}, VisitOutcome ${outcomes}`
+    );
   } catch (err: any) {
     console.error('[Extend] Failed:', err?.message || err);
     // Non-fatal — backend continues to start; metrics will fall back to as_of anchor.

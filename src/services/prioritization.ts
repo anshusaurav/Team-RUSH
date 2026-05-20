@@ -68,6 +68,7 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
     anomalyCounts,
     outcomeCounts,
     recentVisits,
+    recentVisitsByRetailer,
     biologicalByTehsil,
     digitalByTehsil,
     completedToday,
@@ -97,10 +98,19 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
       { $group: { _id: '$retailer_id', count: { $sum: 1 } } },
     ]),
 
-    // Last visit date per tehsil for this rep
+    // Last visit date per tehsil for this rep (fallback when we have no
+    // retailer-level data for a particular retailer).
     VisitLog.aggregate([
       { $match: { rep_id: repId } },
       { $group: { _id: '$visit_tehsil', last_visit: { $max: '$visit_date' } } },
+    ]),
+
+    // Last visit date per RETAILER for this rep — preferred signal. Uses
+    // VisitOutcome (the only source with a retailer_id). For retailers
+    // without any logged outcome we fall back to the tehsil aggregation.
+    VisitOutcome.aggregate([
+      { $match: { rep_id: repId, retailer_id: { $in: retailerIds } } },
+      { $group: { _id: '$retailer_id', last_visit: { $max: '$visit_date' } } },
     ]),
 
     // Biological urgency: count growers per tehsil with a crop stage within the scoring window.
@@ -170,6 +180,10 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
   const anomalyMap = new Map(anomalyCounts.map((a: any) => [a._id, a.count]));
   const outcomeMap = new Map(outcomeCounts.map((o: any) => [o._id, o.count]));
   const visitMap = new Map(recentVisits.map((v: any) => [v._id, new Date(v.last_visit)]));
+  // Retailer-level last-visit map — preferred over tehsil-level when present.
+  const retailerVisitMap = new Map(
+    recentVisitsByRetailer.map((v: any) => [v._id, new Date(v.last_visit)])
+  );
   const bioMap = new Map(biologicalByTehsil.map((b: any) => [b._id, b.count]));
   const digitalMap = new Map(digitalByTehsil.map((d: any) => [d._id, d.count]));
 
@@ -198,7 +212,13 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
 
   // Score each retailer
   const scores: RetailerScore[] = retailers.map((retailer) => {
-    const lastVisit = visitMap.get(retailer.tehsil);
+    // Prefer per-retailer recency (true visit history) over per-tehsil (proxy).
+    // Retailers the rep has never logged an outcome for fall back to the
+    // tehsil-level last-visit date — that's still a useful "rep was in your
+    // area X days ago" signal, just less precise.
+    const lastVisit =
+      retailerVisitMap.get(retailer.retailer_id) ??
+      visitMap.get(retailer.tehsil);
     const daysSince = lastVisit
       ? Math.floor((targetDate.getTime() - lastVisit.getTime()) / 86400000)
       : 999;
