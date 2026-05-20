@@ -7,6 +7,7 @@
     "dev": "nodemon --exec ts-node src/index.ts",
     "seed": "ts-node src/scripts/seed.ts",
     "extend-data": "ts-node src/scripts/extend-data.ts",
+    "start-local-mongo": "ts-node src/scripts/start-local-mongo.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
@@ -29,6 +30,7 @@
     "typescript": "^5.4.5"
   },
   "devDependencies": {
+    "mongodb-memory-server": "^11.1.0",
     "nodemon": "^3.1.4",
     "ts-node": "^10.9.2"
   }
