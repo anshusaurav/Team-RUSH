@@ -73,11 +73,21 @@ function computeFactors(sb: ScoreBreakdown, proximityIndex: number) {
     { key: 'lowStock',  pts: sb.low_stock_count * 5,              label: `${sb.low_stock_count} low-stock`, color: 'text-amber-700 bg-amber-100' },
     { key: 'sales',     pts: Math.min(sb.sales_velocity_30d / 5, 20), label: 'High velocity',              color: 'text-teal-700 bg-teal-100' },
     { key: 'trend',     pts: trendPts,                            label: trendLabel,                       color: trendColor },
-    { key: 'anomaly',   pts: sb.anomaly_count * 20,               label: `${sb.anomaly_count} alert${sb.anomaly_count !== 1 ? 's' : ''}`, color: 'text-red-700 bg-red-100' },
+    // anomaly_score is the backend-computed type-weighted sum (stock_out=25, visit_gap=8 etc).
+    // Falls back to count*15 if older backend doesn't return anomaly_score yet.
+    { key: 'anomaly',   pts: sb.anomaly_score ?? sb.anomaly_count * 15, label: `${sb.anomaly_count} alert${sb.anomaly_count !== 1 ? 's' : ''}`, color: 'text-red-700 bg-red-100' },
     { key: 'outcome',   pts: sb.outcome_boost * 10,               label: 'Past orders',                   color: 'text-green-700 bg-green-100' },
     { key: 'bio',       pts: Math.min((sb.biological_urgency ?? 0) * 5, 25), label: 'Crop stage',         color: 'text-emerald-700 bg-emerald-100' },
     { key: 'digital',   pts: Math.min((sb.digital_intent ?? 0) * 3, 15),     label: 'WhatsApp intent',    color: 'text-blue-700 bg-blue-100' },
     { key: 'weather',   pts: sb.weather_risk ?? 0,                label: 'Weather risk',                  color: 'text-orange-700 bg-orange-100' },
+    {
+      key: 'catchment',
+      pts: sb.catchment_gap ?? 0,
+      label: (sb.grower_density ?? 0) >= 50
+        ? `Underpenetrated · ${sb.grower_density} growers`
+        : `Catchment gap · ${sb.grower_density ?? 0} growers`,
+      color: 'text-fuchsia-700 bg-fuchsia-100',
+    },
     { key: 'proximity', pts: proximityIndex >= 0 ? Math.max(0, 5 - proximityIndex) : 0, label: 'On-route', color: 'text-purple-700 bg-purple-100' },
   ]
     .filter(f => f.pts > 0)
@@ -161,6 +171,7 @@ export default function VisitPlanCard({
                     f.key === 'weather' ? 'bg-orange-400' :
                     f.key === 'recency' ? 'bg-gray-400' :
                     f.key === 'trend' ? 'bg-rose-400' :
+                    f.key === 'catchment' ? 'bg-fuchsia-400' :
                     'bg-green-500';
                   return (
                     <div

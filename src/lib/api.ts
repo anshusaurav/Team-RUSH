@@ -40,10 +40,15 @@ export interface ScoreBreakdown {
    */
   sales_trend_slope?: number | null;
   anomaly_count: number;
+  /** Backend-computed type-weighted anomaly contribution (stock_out=25, visit_gap=8, etc.) */
+  anomaly_score?: number;
   outcome_boost: number;
   biological_urgency: number; // growers with upcoming crop stage in this tehsil
   digital_intent: number;     // growers who clicked a WhatsApp campaign in this tehsil
   weather_risk?: number;      // 0–25 pts from pest forecast + NDVI / rain
+  /** Underpenetration boost — many growers, low sales. Null if no grower data. */
+  catchment_gap?: number | null;
+  grower_density?: number;    // growers in this retailer's tehsil
 }
 
 export interface VisitPlanItem {
