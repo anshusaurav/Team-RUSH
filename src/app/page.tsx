@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useLocale } from '@/lib/i18n/LocaleProvider';
 import LandingFeatures from '@/components/LandingFeatures';
+import HeroCarousel from '@/components/HeroCarousel';
 
 export default function LandingPage() {
   const { t } = useLocale();
@@ -57,26 +58,9 @@ export default function LandingPage() {
               </p>
             </div>
 
-            {/* RIGHT: product mockup placeholder — uses the same Daily Plan
-                preview we generated for the PWA manifest screenshot. */}
-            <div className="relative flex justify-center md:justify-end">
-              {/* Soft glow behind the mockup */}
-              <div
-                className="absolute inset-0 rounded-[2rem] blur-2xl opacity-60"
-                style={{ background: 'radial-gradient(closest-side, rgba(22,163,74,0.25), transparent 70%)' }}
-              />
-              <div className="relative rounded-[1.5rem] bg-white border border-gray-200 shadow-2xl shadow-green-900/10 overflow-hidden w-full max-w-[340px]">
-                {/* Phone-bezel hint */}
-                <div className="h-6 bg-gray-50 flex items-center justify-center border-b border-gray-100">
-                  <span className="w-10 h-1 rounded-full bg-gray-300" />
-                </div>
-                <img
-                  src="/screenshot-mobile.png"
-                  alt="Field Co-Pilot daily visit plan on mobile"
-                  className="block w-full h-auto"
-                />
-              </div>
-            </div>
+            {/* RIGHT: auto-cycling product mockup carousel (4 slides, 3s each)
+                showing each of the four features the rep lives in. */}
+            <HeroCarousel />
           </div>
         </div>
       </section>
