@@ -7,7 +7,10 @@
  *  - Offline page shown when navigation fails entirely
  */
 
-const CACHE = 'field-copilot-v1';
+// Bumping this string invalidates all previously-cached entries the next
+// time the service worker activates. Bump on any meaningful change to
+// caching strategy or precached routes.
+const CACHE = 'disha-v2';
 
 const PRECACHE = [
   '/',
