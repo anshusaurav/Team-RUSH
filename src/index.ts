@@ -15,10 +15,12 @@ import outcomesRouter from './routes/outcomes';
 import weatherRouter from './routes/weather';
 import rfRecommendationRouter from './routes/rfRecommendation';
 import brainAnomaliesRouter   from './routes/brainAnomalies';
+import routeOptimizeRouter    from './routes/routeOptimize';
 import { prefetchAllDistrictWeather } from './services/weatherService';
 import { DISTRICT_COORDS } from './data/districtCoords';
 import { loadModel }       from './services/rfAdvisor';
 import { loadBrainModel }  from './services/brainAdvisor';
+import { extendDataToYesterday, isExtenderEnabled } from './services/dataExtender';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +45,7 @@ app.use('/api/outcomes', outcomesRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/rf-recommendation', rfRecommendationRouter);
 app.use('/api/brain-anomalies',   brainAnomaliesRouter);
+app.use('/api/route-optimize',    routeOptimizeRouter);
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -72,17 +75,28 @@ async function start() {
   // Pre-warm weather cache for all districts (non-blocking)
   prefetchAllDistrictWeather(Object.keys(DISTRICT_COORDS)).catch(console.error);
 
-  // Run once on startup so anomaly data is always fresh for demo
-  console.log('[STARTUP] Running initial anomaly detection...');
-  runAnomalyDetection()
-    .then((r) => console.log(`[STARTUP] ${r.inserted} anomalies loaded`))
-    .catch(console.error);
-
-  // Load pre-trained RF model from JSON (instant — no training at runtime)
+  // Load pre-trained ML artifacts (instant — no training at runtime)
   loadModel();
-
-  // Load pre-trained Brain.js LSTM from JSON (instant — no training at runtime)
   loadBrainModel();
+
+  // Optionally extend the synthetic dataset forward to yesterday, then run
+  // anomaly detection. Extension runs in the background so it doesn't block
+  // the API; anomalies are re-run after it finishes for a fresh view.
+  if (isExtenderEnabled()) {
+    extendDataToYesterday()
+      .then(() => {
+        console.log('[STARTUP] Re-running anomaly detection on extended data…');
+        return runAnomalyDetection();
+      })
+      .then((r) => console.log(`[STARTUP] ${r?.inserted ?? 0} anomalies loaded (post-extend)`))
+      .catch(console.error);
+  } else {
+    // Standard path: detect anomalies once on startup against seed data.
+    console.log('[STARTUP] Running initial anomaly detection...');
+    runAnomalyDetection()
+      .then((r) => console.log(`[STARTUP] ${r.inserted} anomalies loaded`))
+      .catch(console.error);
+  }
 }
 
 start().catch((err) => {
