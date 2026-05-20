@@ -5,7 +5,7 @@ const en = {
     heroEyebrow: 'Built for Bharat',
     heroTitle: 'Smarter days in the field, every day.',
     heroSubtitle: 'Field Co-Pilot turns a Syngenta sales representative’s day from a fixed retailer rotation into a ranked, explainable plan that adapts to inventory, weather, pest pressure, and farmer demand — wherever they are in India.',
-    ctaPrimary: 'Plan today’s visits',
+    ctaPrimary: 'View today’s plan',
     ctaSecondary: 'Browse reps',
     whyTitle: 'Built for the reality of Indian agriculture',
     whyBlurb: 'Hyper-local, time-sensitive, and deeply heterogeneous — the field rep’s day cannot be planned from a desk.',
