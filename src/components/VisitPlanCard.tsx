@@ -100,19 +100,47 @@ export default function VisitPlanCard({
           </div>
         </div>
 
-        {/* Score explainability — top driving factors (why this retailer is ranked here) */}
+        {/* Score explainability — visual factor bar + top-driver chips */}
         {topFactors.length > 0 && (
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Why:</span>
-            {topFactors.map(f => (
-              <span
-                key={f.key}
-                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${f.color}`}
-                title={`+${Math.round(f.pts)} pts`}
-              >
-                {f.label} +{Math.round(f.pts)}
-              </span>
-            ))}
+          <div className="mt-2.5 space-y-1.5">
+            {/* Stacked proportion bar */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold shrink-0">Why:</span>
+              <div className="flex-1 flex h-2 rounded-full overflow-hidden gap-px bg-gray-100">
+                {topFactors.map(f => {
+                  const pct = item.score > 0 ? (f.pts / item.score) * 100 : 0;
+                  const barColor =
+                    f.key === 'stockOut' || f.key === 'anomaly' ? 'bg-red-400' :
+                    f.key === 'lowStock' ? 'bg-amber-400' :
+                    f.key === 'bio' ? 'bg-emerald-500' :
+                    f.key === 'digital' ? 'bg-blue-400' :
+                    f.key === 'weather' ? 'bg-orange-400' :
+                    f.key === 'recency' ? 'bg-gray-400' :
+                    'bg-green-500';
+                  return (
+                    <div
+                      key={f.key}
+                      className={`${barColor} transition-all`}
+                      style={{ width: `${pct}%` }}
+                      title={`${f.label}: +${Math.round(f.pts)} pts`}
+                    />
+                  );
+                })}
+                {/* Remainder */}
+                <div className="flex-1 bg-gray-100" />
+              </div>
+            </div>
+            {/* Driver chips */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {topFactors.map(f => (
+                <span
+                  key={f.key}
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${f.color}`}
+                >
+                  {f.label} +{Math.round(f.pts)}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 

@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { getVisitPlan, getAnomalies, getRepStats, getRep, getWeather, VisitPlanItem, AnomalyFlag, RepStats, WeatherSummary, Rep } from '@/lib/api';
 import VisitPlanCard from '@/components/VisitPlanCard';
 import CompactSnapshot from '@/components/CompactSnapshot';
 import RepSelector from '@/components/RepSelector';
 import StatCard from '@/components/StatCard';
-import { RefreshCw, List, Map as MapIcon } from 'lucide-react';
+import TerritoryInsight from '@/components/TerritoryInsight';
+import { RefreshCw, List, Map as MapIcon, CheckCircle } from 'lucide-react';
 import { useLocale } from '@/lib/i18n/LocaleProvider';
 import { useSelectedRep } from '@/lib/useSelectedRep';
 
@@ -34,6 +36,8 @@ function formatCompact(n: number): string {
 export default function DashboardPage() {
   const { t, setAutoLocale } = useLocale();
   const { repId, territoryId, setRep, hydrated } = useSelectedRep();
+  const searchParams = useSearchParams();
+  const visitDone = searchParams.get('visitDone'); // retailer ID just logged
   const [plan, setPlan] = useState<VisitPlanItem[]>([]);
   const [anomalies, setAnomalies] = useState<AnomalyFlag[]>([]);
   const [stats, setStats] = useState<RepStats | null>(null);
@@ -132,6 +136,14 @@ export default function DashboardPage() {
       {/* ─── Rep selector ───────────────────────────────────────────── */}
       <RepSelector currentRepId={repId} onSelect={handleRepChange} />
 
+      {/* ─── Visit-logged success banner ─────────────────────────────── */}
+      {visitDone && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-300 rounded-lg px-4 py-2.5 text-sm text-green-800 font-medium">
+          <CheckCircle size={16} className="text-green-600 shrink-0" />
+          Visit at <strong>{visitDone}</strong> logged — plan refreshed, stop removed.
+        </div>
+      )}
+
       {/* ─── Offline / error banner ─────────────────────────────────── */}
       {error && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
@@ -142,6 +154,9 @@ export default function DashboardPage() {
       {/* ─── Today snapshot — weather + alert chips, dense, out of the
             main flow so the visit plan stays the hero. ───────────────── */}
       <CompactSnapshot weather={weather} anomalies={anomalies} />
+
+      {/* ─── Territory Intelligence — LLM strategic overview (manager view) */}
+      {!loading && <TerritoryInsight territoryId={territoryId} />}
 
       {/* ─── Visit plan (HERO) — map by default, list opt-in ────────── */}
       <section>

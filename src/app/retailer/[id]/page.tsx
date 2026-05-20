@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { getRetailer, getNextBestAction, logOutcome, getVelocityData, RetailerDetail, NextBestAction, VelocityData } from '@/lib/api';
 import { MapPin, Package, TrendingUp, ChevronLeft, Sparkles, CheckCircle, Activity } from 'lucide-react';
 import Link from 'next/link';
@@ -14,6 +14,7 @@ import { useLocale } from '@/lib/i18n/LocaleProvider';
 export default function RetailerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const repId = searchParams.get('repId') || 'REP_0001';
   const { t, locale } = useLocale();
   const dateLocale = locale === 'hi' ? 'hi-IN' : 'en-IN';
@@ -65,6 +66,10 @@ export default function RetailerDetailPage() {
     try {
       await logOutcome({ repId, retailerId: id, outcome, productDiscussed: product, notes, aiRecommendationUsed: !!advice });
       setLogged(true);
+      // Redirect back to dashboard after a short pause so the user sees the
+      // confirmation banner before navigating away. Pass ?visitDone=<id> so
+      // the dashboard can show a plan-refreshed callout.
+      setTimeout(() => router.push(`/dashboard?visitDone=${id}`), 1400);
     } catch (e: any) {
       // Surface the actual reason so the user knows what to retry.
       const msg = e?.response?.data?.error || e?.message || 'Unknown error';

@@ -133,8 +133,22 @@ export interface RFRecommendation {
 
 // ─── API calls ────────────────────────────────────────────────────────────────
 
+export interface RepLeaderboardEntry {
+  rep_id: string;
+  visits_this_week: number;
+  acceptance_rate_30d: number | null;   // null = no outcomes logged yet
+  outcomes_total_30d: number;
+  coverage_efficiency_30d: number | null;
+  tehsils_visited_30d: number;
+  tehsils_total: number;
+}
+
 export const getReps = () =>
   api.get<{ total: number; reps: Rep[] }>('/api/reps').then(r => r.data);
+
+export const getRepLeaderboard = () =>
+  api.get<{ success: boolean; as_of: string; leaderboard: RepLeaderboardEntry[] }>('/api/reps/leaderboard')
+    .then(r => r.data);
 
 export const getRep = (repId: string) =>
   api.get<{ rep: Rep }>(`/api/reps/${repId}`).then(r => r.data);

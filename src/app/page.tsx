@@ -7,6 +7,7 @@ import {
   BrainCircuit,
   Smartphone,
   ArrowRight,
+  MousePointerClick,
 } from 'lucide-react';
 import { useLocale } from '@/lib/i18n/LocaleProvider';
 import LandingFeatures from '@/components/LandingFeatures';
@@ -128,6 +129,41 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ─── TRY THE DEMO ─────────────────────────────────────────────── */}
+      <section className="bg-stone-50 border-y border-gray-100">
+        <div className="max-w-4xl mx-auto px-5 py-14 sm:py-16">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-green-200 text-xs font-semibold text-green-800 shadow-sm mb-4">
+              <MousePointerClick size={12} /> 5-step demo
+            </div>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+              Walk through in under 3 minutes
+            </h2>
+            <p className="mt-2 text-gray-500 text-sm">REP_0001 · Bihar territory · pre-loaded with synthetic Rabi 2026 data</p>
+          </div>
+          <ol className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+            {[
+              { n: '1', title: 'Open Dashboard', body: 'REP_0001 is pre-selected. Switch to List view to see ranked visit cards.', href: '/dashboard' },
+              { n: '2', title: 'Inspect the "Why"', body: 'Each card shows the top score drivers — stock-out, anomaly, crop stage — with a factor bar.', href: '/dashboard' },
+              { n: '3', title: 'Territory AI', body: 'Expand "Territory Intelligence" for an LLM-generated strategic overview of the territory.', href: '/dashboard' },
+              { n: '4', title: 'Visit a retailer', body: 'Click any card. Get an RF product pick + Claude or Gemini visit briefing. Switch providers.', href: '/reps' },
+              { n: '5', title: 'Log & watch plan refresh', body: 'Log a sale outcome — the retailer drops from the plan and a confirmation banner appears.', href: '/dashboard' },
+            ].map((step) => (
+              <li key={step.n} className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-2 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-8 h-8 rounded-full bg-green-700 text-white font-bold text-sm flex items-center justify-center shadow-sm shadow-green-700/20">
+                  {step.n}
+                </div>
+                <div className="font-semibold text-gray-900 text-sm">{step.title}</div>
+                <p className="text-xs text-gray-500 leading-relaxed flex-1">{step.body}</p>
+                <Link href={step.href} className="text-xs text-green-700 font-semibold hover:underline mt-1 flex items-center gap-1">
+                  Go <ArrowRight size={11} />
+                </Link>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getReps, Rep } from '@/lib/api';
+import { getReps, getRepLeaderboard, Rep, RepLeaderboardEntry } from '@/lib/api';
 import { MapPin, ChevronRight, Search, Users } from 'lucide-react';
 import { useLocale } from '@/lib/i18n/LocaleProvider';
 import { useSelectedRep } from '@/lib/useSelectedRep';
@@ -44,9 +44,18 @@ export default function RepsPage() {
   const [reps, setReps] = useState<Rep[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [leaderboard, setLeaderboard] = useState<Map<string, RepLeaderboardEntry>>(new Map());
 
   useEffect(() => {
     getReps().then(d => setReps(d.reps ?? [])).finally(() => setLoading(false));
+    // Load leaderboard in parallel — non-blocking; cards render first then stats fill in.
+    getRepLeaderboard()
+      .then(d => {
+        const m = new Map<string, RepLeaderboardEntry>();
+        d.leaderboard.forEach(e => m.set(e.rep_id, e));
+        setLeaderboard(m);
+      })
+      .catch(() => {}); // stats are non-critical
   }, []);
 
   const handlePick = (rep: Rep) => {
@@ -141,6 +150,7 @@ export default function RepsPage() {
               {group.reps.map(rep => {
                 const isCurrent = rep.rep_id === currentRepId;
                 const c = stateColor(rep.state);
+                const lb = leaderboard.get(rep.rep_id);
                 return (
                   <button
                     key={rep.rep_id}
@@ -160,7 +170,7 @@ export default function RepsPage() {
                     </div>
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <div className="font-semibold text-gray-900 text-sm truncate">
                           {prettifyTerritoryName(rep.territory_name)}
                         </div>
@@ -177,6 +187,32 @@ export default function RepsPage() {
                         <MapPin size={10} />
                         <span className="truncate">{rep.district}</span>
                       </div>
+                      {/* Leaderboard stats — appear once the async call resolves */}
+                      {lb && (
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          {lb.acceptance_rate_30d !== null ? (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                              lb.acceptance_rate_30d >= 70 ? 'bg-green-100 text-green-700' :
+                              lb.acceptance_rate_30d >= 40 ? 'bg-amber-100 text-amber-700' :
+                              'bg-red-100 text-red-600'
+                            }`}>
+                              {lb.acceptance_rate_30d}% accept.
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-gray-400">No outcomes yet</span>
+                          )}
+                          {lb.coverage_efficiency_30d !== null && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold">
+                              {lb.coverage_efficiency_30d}% coverage
+                            </span>
+                          )}
+                          {lb.visits_this_week > 0 && (
+                            <span className="text-[10px] text-gray-400">
+                              {lb.visits_this_week} visits/wk
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <ChevronRight
                       size={16}
