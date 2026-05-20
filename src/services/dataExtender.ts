@@ -23,6 +23,7 @@ import WhatsappLog from '../models/WhatsappLog';
 import RepTerritory from '../models/RepTerritory';
 import Retailer from '../models/Retailer';
 import Grower from '../models/Grower';
+import DigitalFunnel from '../models/DigitalFunnel';
 
 // --------------------------------------------------------------------------
 // Configuration
@@ -103,6 +104,16 @@ function weekEndSunday(d: Date): Date {
   const dow = x.getUTCDay(); // 0 = Sun
   const diff = (7 - dow) % 7;
   x.setUTCDate(x.getUTCDate() + diff);
+  return x;
+}
+
+// Monday-aligned week start — matches digital_funnel_weekly.csv (week_start_date
+// is always a Monday in the seed data).
+function weekStartMonday(d: Date): Date {
+  const x = dateOnly(d);
+  const dow = x.getUTCDay(); // 0=Sun..6=Sat
+  const back = dow === 0 ? 6 : dow - 1; // days since the most recent Monday
+  x.setUTCDate(x.getUTCDate() - back);
   return x;
 }
 
@@ -543,6 +554,87 @@ async function extendWhatsappLogs(asOfYesterday: Date, cfg: ExtenderConfig): Pro
 }
 
 // --------------------------------------------------------------------------
+// Digital funnel extension
+// --------------------------------------------------------------------------
+
+/**
+ * Projects each marketing campaign's weekly funnel (impressions, landing page
+ * visits, lead form submissions) forward to the most recent Monday on or
+ * before yesterday. Per-campaign mean + std are learned from the existing
+ * rows; new weeks are sampled as Poisson(mean) with the historical mean as λ.
+ *
+ * Idempotent — the (campaign_id, week_start_date) compound unique index drops
+ * duplicates under ordered:false.
+ */
+async function extendDigitalFunnel(asOfYesterday: Date, cfg: ExtenderConfig): Promise<number> {
+  console.log('[Extend] DigitalFunnel: starting…');
+
+  const profiles = await DigitalFunnel.aggregate<{
+    _id: string; // campaign_id
+    last_week: Date;
+    crop: string;
+    product: string;
+    impressions: number[];
+    visits: number[];
+    leads: number[];
+  }>([
+    { $sort: { week_start_date: -1 } },
+    {
+      $group: {
+        _id: '$campaign_id',
+        last_week: { $first: '$week_start_date' },
+        crop:      { $first: '$campaign_crop' },
+        product:   { $first: '$campaign_product' },
+        impressions: { $push: '$social_post_impression' },
+        visits:      { $push: '$landing_page_visits' },
+        leads:       { $push: '$lead_form_submission' },
+      },
+    },
+  ]);
+
+  if (profiles.length === 0) {
+    console.log('[Extend] DigitalFunnel: no campaigns found, skipping');
+    return 0;
+  }
+
+  const endWeek = weekStartMonday(asOfYesterday);
+  const out: Array<{
+    campaign_id: string;
+    week_start_date: Date;
+    social_post_impression: number;
+    landing_page_visits: number;
+    lead_form_submission: number;
+    campaign_crop: string;
+    campaign_product: string;
+  }> = [];
+
+  for (const p of profiles) {
+    const start = addDays(weekStartMonday(p.last_week), 7);
+    if (start > endWeek) continue;
+
+    const impMean = p.impressions.reduce((s, v) => s + v, 0) / p.impressions.length;
+    const visMean = p.visits.reduce((s, v) => s + v, 0)      / p.visits.length;
+    const ledMean = p.leads.reduce((s, v) => s + v, 0)       / p.leads.length;
+
+    for (let wk = new Date(start); wk <= endWeek; wk = addDays(wk, 7)) {
+      const seasonMul = seasonalityMultiplier(wk, cfg.seasonality);
+      out.push({
+        campaign_id:            p._id,
+        week_start_date:        new Date(wk),
+        // Poisson-sample around the historical mean for realism; clamp to 0+
+        social_post_impression: Math.max(0, poissonSample(impMean * seasonMul)),
+        landing_page_visits:    Math.max(0, poissonSample(visMean * seasonMul)),
+        lead_form_submission:   Math.max(0, poissonSample(ledMean * seasonMul)),
+        campaign_crop:          p.crop,
+        campaign_product:       p.product,
+      });
+    }
+  }
+
+  return await batchInsert(DigitalFunnel, out, 'DigitalFunnel', cfg.batchSize);
+}
+
+// --------------------------------------------------------------------------
 // Insertion helper
 // --------------------------------------------------------------------------
 
@@ -609,14 +701,15 @@ export async function extendDataToYesterday(): Promise<void> {
 
   const t0 = Date.now();
   try {
-    const [pos, visits, inv, wa] = await Promise.all([
+    const [pos, visits, inv, wa, funnel] = await Promise.all([
       extendPOS(cappedEnd, cfg),
       extendVisitLogs(cappedEnd, cfg),
       extendInventory(cappedEnd, cfg),
       extendWhatsappLogs(cappedEnd, cfg),
+      extendDigitalFunnel(cappedEnd, cfg),
     ]);
     const dt = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`[Extend] Done in ${dt}s — POS ${pos}, VisitLog ${visits}, Inventory ${inv}, WhatsApp ${wa}`);
+    console.log(`[Extend] Done in ${dt}s — POS ${pos}, VisitLog ${visits}, Inventory ${inv}, WhatsApp ${wa}, DigitalFunnel ${funnel}`);
   } catch (err: any) {
     console.error('[Extend] Failed:', err?.message || err);
     // Non-fatal — backend continues to start; metrics will fall back to as_of anchor.

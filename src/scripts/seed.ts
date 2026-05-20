@@ -12,6 +12,7 @@ import Inventory from '../models/Inventory';
 import POS from '../models/POS';
 import Grower from '../models/Grower';
 import WhatsappLog from '../models/WhatsappLog';
+import DigitalFunnel from '../models/DigitalFunnel';
 
 const DATASET_PATH = process.env.DATASET_PATH
   ? path.resolve(process.env.DATASET_PATH)
@@ -227,6 +228,24 @@ async function seed() {
       }),
       WhatsappLog,
       'WhatsApp Logs'
+    );
+  }
+
+  // 8. Digital funnel (campaign-level weekly aggregates — ~104 rows, very small)
+  if (!only || only.includes('digital_funnel')) {
+    await streamAndInsert(
+      'digital_funnel_weekly.csv',
+      (row) => ({
+        campaign_id:            row.campaign_id?.trim(),
+        week_start_date:        new Date(row.week_start_date),
+        social_post_impression: parseInt(row.social_post_impression) || 0,
+        landing_page_visits:    parseInt(row.landing_page_visits) || 0,
+        lead_form_submission:   parseInt(row.lead_form_submission) || 0,
+        campaign_crop:          row.campaign_crop?.trim(),
+        campaign_product:       row.campaign_product?.trim(),
+      }),
+      DigitalFunnel,
+      'Digital Funnel'
     );
   }
 
