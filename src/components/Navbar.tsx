@@ -29,7 +29,14 @@ export default function Navbar() {
               <Sprout size={15} className="text-white" />
             </span>
             <span className="font-bold text-lg tracking-tight">{t('brand')}</span>
-            <span className="hidden sm:inline text-xs text-gray-400 tracking-wider uppercase ml-1">by Syngenta</span>
+            {/* Syngenta logo — filter:brightness(0) renders all fills as black on the light landing navbar */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/syngenta-logo.svg"
+              alt="Syngenta"
+              className="hidden sm:block ml-2 opacity-40"
+              style={{ height: '14px', filter: 'brightness(0)' }}
+            />
           </Link>
           <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-sm border border-gray-200 px-1 py-1">
             <LanguagePicker />
