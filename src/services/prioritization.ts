@@ -58,6 +58,10 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
   // Biological window: stages occurring within ±7 days past and 21 days ahead of target date
   const bioWindowStart = new Date(targetDate.getTime() - 7 * 86400000);
   const bioWindowEnd = new Date(targetDate.getTime() + 21 * 86400000);
+  // "Today" window used to drop retailers the rep has already logged an outcome for.
+  const startOfTargetDay = new Date(targetDate);
+  startOfTargetDay.setUTCHours(0, 0, 0, 0);
+  const endOfTargetDay = new Date(startOfTargetDay.getTime() + 86400000);
 
   const [
     latestWeek,
@@ -66,6 +70,7 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
     recentVisits,
     biologicalByTehsil,
     digitalByTehsil,
+    completedToday,
   ] = await Promise.all([
     // Latest inventory snapshot date
     Inventory.findOne({ retailer_id: { $in: retailerIds } })
@@ -145,7 +150,19 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
         },
       },
     ]),
+
+    // Retailers the rep has already logged an outcome for today — they drop
+    // out of the plan so the dashboard reflects "stop done" without the user
+    // having to refresh anything else.
+    VisitOutcome.find({
+      rep_id: repId,
+      retailer_id: { $in: retailerIds },
+      visit_date: { $gte: startOfTargetDay, $lt: endOfTargetDay },
+    })
+      .select('retailer_id')
+      .lean(),
   ]);
+  const completedTodaySet = new Set<string>(completedToday.map((o: any) => o.retailer_id));
 
   const latestWeekDate = latestWeek?.week_end_date;
 
@@ -237,6 +254,10 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
     };
   });
 
-  // Return top 15, sorted by score descending
-  return scores.sort((a, b) => b.score - a.score).slice(0, 15);
+  // Drop stops already completed today (outcome logged by this rep on this
+  // date), then return top 15 sorted by score descending.
+  return scores
+    .filter(s => !completedTodaySet.has(s.retailer_id))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 15);
 }
