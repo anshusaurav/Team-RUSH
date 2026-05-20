@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { VisitPlanItem } from '@/lib/api';
+import { VisitPlanItem, ScoreBreakdown } from '@/lib/api';
 import { MapPin, Clock, Package, TrendingUp, AlertTriangle, Leaf, Smartphone } from 'lucide-react';
 import { useLocale } from '@/lib/i18n/LocaleProvider';
 
@@ -31,6 +31,26 @@ function proximityKey(index: number): string {
   return 'visitCard.proximityFar';
 }
 
+/** Mirror the server-side scoring formula so we can show factor contributions. */
+function computeFactors(sb: ScoreBreakdown, proximityIndex: number) {
+  const days = sb.days_since_visit === -1 ? 999 : sb.days_since_visit;
+  return [
+    { key: 'recency',   pts: Math.min(days, 30) * 2,              label: days >= 30 ? 'Overdue'          : `${days}d gap`,     color: 'text-gray-600 bg-gray-100' },
+    { key: 'stockOut',  pts: sb.stock_out_count * 15,             label: `${sb.stock_out_count} stock-out`, color: 'text-red-700 bg-red-100' },
+    { key: 'lowStock',  pts: sb.low_stock_count * 5,              label: `${sb.low_stock_count} low-stock`, color: 'text-amber-700 bg-amber-100' },
+    { key: 'sales',     pts: Math.min(sb.sales_velocity_30d / 5, 20), label: 'High velocity',              color: 'text-teal-700 bg-teal-100' },
+    { key: 'anomaly',   pts: sb.anomaly_count * 20,               label: `${sb.anomaly_count} alert${sb.anomaly_count !== 1 ? 's' : ''}`, color: 'text-red-700 bg-red-100' },
+    { key: 'outcome',   pts: sb.outcome_boost * 10,               label: 'Past orders',                   color: 'text-green-700 bg-green-100' },
+    { key: 'bio',       pts: Math.min((sb.biological_urgency ?? 0) * 5, 25), label: 'Crop stage',         color: 'text-emerald-700 bg-emerald-100' },
+    { key: 'digital',   pts: Math.min((sb.digital_intent ?? 0) * 3, 15),     label: 'WhatsApp intent',    color: 'text-blue-700 bg-blue-100' },
+    { key: 'weather',   pts: sb.weather_risk ?? 0,                label: 'Weather risk',                  color: 'text-orange-700 bg-orange-100' },
+    { key: 'proximity', pts: proximityIndex >= 0 ? Math.max(0, 5 - proximityIndex) : 0, label: 'On-route', color: 'text-purple-700 bg-purple-100' },
+  ]
+    .filter(f => f.pts > 0)
+    .sort((a, b) => b.pts - a.pts)
+    .slice(0, 3); // top 3 drivers only — keep card compact
+}
+
 export default function VisitPlanCard({
   rank, item, repId,
 }: {
@@ -46,6 +66,8 @@ export default function VisitPlanCard({
   const proxLabel = showProximity ? t(proximityKey(item.proximity_index)) : '';
   const bioUrgency = sb.biological_urgency ?? 0;
   const digitalIntent = sb.digital_intent ?? 0;
+
+  const topFactors = computeFactors(sb, item.proximity_index);
 
   return (
     <Link href={`/retailer/${item.retailer_id}?repId=${repId}`}>
@@ -77,6 +99,22 @@ export default function VisitPlanCard({
             <div className="text-xs text-gray-400">{t('visitCard.score')}</div>
           </div>
         </div>
+
+        {/* Score explainability — top driving factors (why this retailer is ranked here) */}
+        {topFactors.length > 0 && (
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Why:</span>
+            {topFactors.map(f => (
+              <span
+                key={f.key}
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${f.color}`}
+                title={`+${Math.round(f.pts)} pts`}
+              >
+                {f.label} +{Math.round(f.pts)}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Biological urgency + digital intent signals */}
         {(bioUrgency > 0 || digitalIntent > 0) && (

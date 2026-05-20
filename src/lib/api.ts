@@ -38,6 +38,7 @@ export interface ScoreBreakdown {
   outcome_boost: number;
   biological_urgency: number; // growers with upcoming crop stage in this tehsil
   digital_intent: number;     // growers who clicked a WhatsApp campaign in this tehsil
+  weather_risk?: number;      // 0–20 pts from pest-favorable forecast or heavy rain
 }
 
 export interface VisitPlanItem {

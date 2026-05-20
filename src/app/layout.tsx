@@ -3,6 +3,7 @@ import { Inter, Plus_Jakarta_Sans, Hind } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import BackendPing from "@/components/BackendPing";
 import { LocaleProvider } from "@/lib/i18n/LocaleProvider";
 
 const inter = Inter({
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-stone-50 min-h-screen text-gray-800 antialiased">
         <LocaleProvider>
           <ServiceWorkerRegistrar />
+          <BackendPing />
           <Navbar />
           {/* Pages opt into their own width. App pages wrap in .page-shell
               (max-w-2xl) via globals.css; the landing page is free to be

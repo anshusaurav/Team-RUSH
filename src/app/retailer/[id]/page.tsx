@@ -8,6 +8,7 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import RFRecommendationCard from '@/components/RFRecommendationCard';
 import VelocityChart from '@/components/VelocityChart';
+import ProviderToggle from '@/components/ProviderToggle';
 import { useLocale } from '@/lib/i18n/LocaleProvider';
 
 export default function RetailerDetailPage() {
@@ -30,6 +31,7 @@ export default function RetailerDetailPage() {
   const [detailLoading, setDetailLoading] = useState(true);
   const [velocity, setVelocity] = useState<VelocityData | null>(null);
   const [velocityLoading, setVelocityLoading] = useState(true);
+  const [provider, setProvider] = useState<'gemini' | 'claude'>('gemini');
 
   useEffect(() => {
     getRetailer(id).then(setDetail).finally(() => setDetailLoading(false));
@@ -42,8 +44,9 @@ export default function RetailerDetailPage() {
   const fetchAdvice = async () => {
     setAiLoading(true);
     setAiError('');
+    setAdvice(null);
     try {
-      const result = await getNextBestAction(repId, id, 'gemini');
+      const result = await getNextBestAction(repId, id, provider);
       setAdvice(result);
       if (result.context_snapshot.currentInventory[0]) {
         setProduct(result.context_snapshot.currentInventory[0].sku_name);
@@ -173,8 +176,11 @@ export default function RetailerDetailPage() {
 
       {/* AI Recommendation */}
       <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-        <div className="flex items-center gap-2 font-semibold text-green-800 text-sm mb-3">
-          <Sparkles size={15} /> {t('retailer.aiAdvice')}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 font-semibold text-green-800 text-sm">
+            <Sparkles size={15} /> {t('retailer.aiAdvice')}
+          </div>
+          <ProviderToggle value={provider} onChange={(p) => { setProvider(p); setAdvice(null); setAiError(''); }} />
         </div>
 
         {!advice && !aiLoading && (
@@ -196,6 +202,9 @@ export default function RetailerDetailPage() {
 
         {advice && (
           <div>
+            <div className="text-xs text-gray-400 mb-2">
+              via {advice.provider_used === 'claude' ? '◆ Claude' : '✦ Gemini'} · just now
+            </div>
             <div className="prose prose-sm prose-green max-w-none
               [&>h1]:text-base [&>h1]:font-bold [&>h1]:text-green-900 [&>h1]:mt-3 [&>h1]:mb-1
               [&>h2]:text-sm [&>h2]:font-bold [&>h2]:text-green-900 [&>h2]:mt-3 [&>h2]:mb-1
