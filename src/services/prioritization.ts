@@ -23,10 +23,19 @@ export interface ScoreBreakdown {
    */
   sales_trend_slope: number | null;
   anomaly_count: number;
+  /** Type-weighted anomaly score contribution (stock_out=25, visit_gap=8, etc.) */
+  anomaly_score: number;
   outcome_boost: number;
   biological_urgency: number; // growers with an upcoming crop stage in this tehsil
   digital_intent: number;     // growers who clicked a WhatsApp campaign in this tehsil
   weather_risk: number;       // 0–25 pts from pest forecast + NDVI / rain
+  /**
+   * Underpenetration signal: many growers in the catchment but the retailer
+   * is selling too few units. Higher = bigger missed opportunity.
+   * Null when there's no grower data for the tehsil.
+   */
+  catchment_gap: number | null;
+  grower_density: number;     // growers in this retailer's tehsil
 }
 
 export interface RetailerScore {
@@ -79,6 +88,7 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
     recentVisitsByRetailer,
     biologicalByTehsil,
     digitalByTehsil,
+    growerDensityByTehsil,
     completedToday,
   ] = await Promise.all([
     // Latest inventory snapshot date
@@ -87,10 +97,17 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
       .select('week_end_date')
       .lean(),
 
-    // Active anomaly counts per retailer
+    // Active anomalies per retailer, grouped by type. Different types carry
+    // different urgency — stock_out is operationally worse than visit_gap.
     AnomalyFlag.aggregate([
       { $match: { retailer_id: { $in: retailerIds }, resolved: false } },
-      { $group: { _id: '$retailer_id', count: { $sum: 1 } } },
+      {
+        $group: {
+          _id: '$retailer_id',
+          count: { $sum: 1 },
+          by_type: { $push: '$anomaly_type' },
+        },
+      },
     ]),
 
     // Positive outcome history (sales/orders in last 30 days) per retailer
@@ -169,6 +186,14 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
       },
     ]),
 
+    // Total grower count per tehsil — used by the catchment-penetration-gap
+    // factor: a retailer in a high-density tehsil with low sales is an
+    // underpenetrated opportunity.
+    Grower.aggregate([
+      { $match: { tehsil: { $in: tehsilList } } },
+      { $group: { _id: '$tehsil', count: { $sum: 1 } } },
+    ]),
+
     // Retailers the rep has already logged an outcome for today — they drop
     // out of the plan so the dashboard reflects "stop done" without the user
     // having to refresh anything else.
@@ -184,8 +209,33 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
 
   const latestWeekDate = latestWeek?.week_end_date;
 
+  // Per-anomaly-type weights. stock_out / stockout_risk are the worst
+  // operational events; visit_gap is the lightest. Sum is what enters the
+  // score, count stays for the score_breakdown display.
+  const ANOMALY_WEIGHT: Record<string, number> = {
+    stock_out:           25,
+    brain_stockout_risk: 20,
+    demand_spike:        15,
+    brain_demand_spike:  15,
+    digital_intent:      12,
+    weather_alert:       12,
+    low_inventory:       10,
+    visit_gap:            8,
+  };
+
   // Build lookup maps
-  const anomalyMap = new Map(anomalyCounts.map((a: any) => [a._id, a.count]));
+  const anomalyMap = new Map<string, number>(
+    anomalyCounts.map((a: any) => [a._id, a.count])
+  );
+  const anomalyWeightedMap = new Map<string, number>(
+    anomalyCounts.map((a: any) => [
+      a._id,
+      (a.by_type || []).reduce(
+        (sum: number, t: string) => sum + (ANOMALY_WEIGHT[t] ?? 15),
+        0
+      ),
+    ])
+  );
   const outcomeMap = new Map(outcomeCounts.map((o: any) => [o._id, o.count]));
   const visitMap = new Map(recentVisits.map((v: any) => [v._id, new Date(v.last_visit)]));
   // Retailer-level last-visit map — preferred over tehsil-level when present.
@@ -194,6 +244,9 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
   );
   const bioMap = new Map(biologicalByTehsil.map((b: any) => [b._id, b.count]));
   const digitalMap = new Map(digitalByTehsil.map((d: any) => [d._id, d.count]));
+  const growerDensityMap = new Map<string, number>(
+    growerDensityByTehsil.map((g: any) => [g._id, g.count])
+  );
 
   // Bulk fetch inventory for all retailers at latest week
   const inventoryByRetailer = latestWeekDate
@@ -266,12 +319,33 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
     const salesVel = salesMap.get(retailer.retailer_id) || 0;
     const slope = slopeMap.get(retailer.retailer_id) ?? null;
     const anomalyCount = anomalyMap.get(retailer.retailer_id) || 0;
+    const anomalyWeighted = anomalyWeightedMap.get(retailer.retailer_id) || 0;
     const outcomeBoost = outcomeMap.get(retailer.retailer_id) || 0;
     const bioUrgency = bioMap.get(retailer.tehsil) || 0;
     const digitalCount = digitalMap.get(retailer.tehsil) || 0;
+    const growerDensity = growerDensityMap.get(retailer.tehsil) || 0;
     const proximityIndex = tehsilList.indexOf(retailer.tehsil);
     const weatherSummary = weatherByDistrict.get(retailer.district) ?? null;
     const weatherScore = weatherRiskScore(weatherSummary);
+
+    // Catchment penetration gap — ratio formulation that's robust to
+    // dataset scale. Compute growers-per-100-velocity-units; a high ratio
+    // means the retailer is under-serving the demand in its catchment.
+    //
+    //   ratio ≥ 3.0 → +10 pts (heavy underpenetration)
+    //   ratio ≥ 1.5 → +6  pts (moderate)
+    //   else 0
+    //
+    // floor sales at 50 to keep cold-start retailers from producing
+    // pathological ratios (∞). Null when grower data is missing.
+    let catchmentGap: number | null = null;
+    let catchmentScore = 0;
+    if (growerDensity > 0) {
+      const ratio = (growerDensity / Math.max(salesVel, 50)) * 100;
+      if      (ratio >= 3.0) { catchmentGap = 10; catchmentScore = 10; }
+      else if (ratio >= 1.5) { catchmentGap = 6;  catchmentScore = 6; }
+      else                   { catchmentGap = 0; }
+    }
 
     // Scoring formula — tunable weights
     const recencyScore    = Math.min(daysSince, 30) * 2;              // max 60
@@ -287,7 +361,7 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
       slope < -0.10          ? 8  :
       slope >  0.30          ? 5  :
                                 0;
-    const anomalyScore    = anomalyCount * 20;                        // 20 pts per active alert
+    const anomalyScore    = anomalyWeighted;                          // type-weighted sum (see ANOMALY_WEIGHT)
     const outcomeScore    = outcomeBoost * 10;                        // 10 pts per recent successful visit
     const proximityBoost  = proximityIndex >= 0 ? Math.max(0, 5 - proximityIndex) : 0; // max 5
     const bioScore        = Math.min(bioUrgency * 5, 25);            // max 25 — crop approaching critical stage
@@ -296,7 +370,8 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
 
     const score =
       recencyScore + stockOutScore + lowStockScore + salesScore + trendScore +
-      anomalyScore + outcomeScore + proximityBoost + bioScore + digitalScore + weatherScore;
+      anomalyScore + outcomeScore + proximityBoost + bioScore + digitalScore +
+      weatherScore + catchmentScore;
 
     return {
       retailer_id: retailer.retailer_id,
@@ -314,10 +389,13 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
         sales_velocity_30d: salesVel,
         sales_trend_slope:  slope,
         anomaly_count:      anomalyCount,
+        anomaly_score:      anomalyWeighted,
         outcome_boost:      outcomeBoost,
         biological_urgency: bioUrgency,
         digital_intent:     digitalCount,
         weather_risk:       weatherScore,
+        catchment_gap:      catchmentGap,
+        grower_density:     growerDensity,
       },
     };
   });
