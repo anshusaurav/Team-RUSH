@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Disha — Frontend (Next.js 16 PWA)
 
-## Getting Started
+This is the frontend for **Disha**, the AI Field Co-Pilot for Syngenta agronomists.
+Built with Next.js 16 App Router, Tailwind CSS, and Leaflet.
 
-First, run the development server:
+**Live:** https://disha-ai-copilot.vercel.app
+
+For full project context, team details, and setup instructions see the root-level `README.md`.
+
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+# Create .env.local with NEXT_PUBLIC_API_URL=http://localhost:3001
+npm run dev       # http://localhost:3000
+npm run build     # production build (enables PWA service worker)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Key directories
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+src/
+  app/           Next.js App Router pages
+  components/    Shared UI components
+  lib/           API client, i18n, hooks
+public/          Static assets, PWA icons, service worker
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech stack
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Next.js 16** — App Router, RSC, `useSearchParams` with Suspense boundary
+- **Tailwind CSS** — utility-first styling
+- **Leaflet + react-leaflet** — visit plan map with TSP route overlay
+- **ReactMarkdown** — renders LLM advice and territory insight
+- **Lucide React** — icons
+- **next-pwa / custom SW** — offline caching of visit plan
