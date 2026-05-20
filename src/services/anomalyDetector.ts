@@ -68,11 +68,13 @@ async function detectDemandSpikes() {
     priorWeeks.map((p: any) => [`${p._id.retailer_id}__${p._id.sku_name}`, p.avg_units])
   );
 
-  // Find spikes: current week > 2x prior average
+  // Find spikes: current week ≥ 2.5× prior average AND ≥ 10 absolute units.
+  // The absolute floor filters out Poisson noise from low-volume SKUs (a SKU
+  // going 1→3 units is statistically meaningless even though it's 3×).
   const spikes = currentWeek.filter((c: any) => {
     const key = `${c._id.retailer_id}__${c._id.sku_name}`;
     const avg = priorMap.get(key) || 0;
-    return avg > 0 && c.units > avg * 2;
+    return avg > 0 && c.units >= 10 && c.units >= avg * 2.5;
   });
 
   if (!spikes.length) return [];
@@ -297,9 +299,12 @@ export async function runAnomalyDetection(): Promise<{ inserted: number; cleared
 
   const allFlags = [...stockOutFlags, ...spikeFlags, ...gapFlags, ...intentFlags, ...weatherFlags, ...brainFlags];
 
-  // Upsert keyed on the natural key (retailer_id, anomaly_type, sku_name)
-  // so re-runs (server restart, cron) refresh the existing row instead of
-  // inserting a duplicate. detected_at bumps to "now" each detection.
+  // Upsert + reconcile. The detector is the source-of-truth for active
+  // anomalies: every row in `allFlags` is upserted (refreshed if it exists,
+  // inserted if new), and any *unresolved* row in the DB whose natural key
+  // isn't in this run's output is deleted. Without this, tightening a rule
+  // or fixing a bad inventory snapshot would leave stale false-positives
+  // visible to reps until the 7-day TTL caught up.
   if (allFlags.length > 0) {
     const ops = allFlags.map((f: any) => ({
       updateOne: {
@@ -314,9 +319,7 @@ export async function runAnomalyDetection(): Promise<{ inserted: number; cleared
             severity:     f.severity,
             description:  f.description,
             detected_at:  new Date(),
-          },
-          $setOnInsert: {
-            resolved: false,
+            resolved:     false,
           },
         },
         upsert: true,
@@ -325,6 +328,25 @@ export async function runAnomalyDetection(): Promise<{ inserted: number; cleared
     await AnomalyFlag.bulkWrite(ops, { ordered: false }).catch((e) =>
       console.warn('[anomaly] bulkWrite warning:', e?.message || e)
     );
+  }
+
+  // Reconcile: delete active rows whose (retailer, type, sku) isn't in the
+  // detector's current output. This is what makes threshold tweaks effective
+  // immediately. Resolved=true rows are preserved (real user-set state).
+  const validKeys = new Set(
+    allFlags.map((f: any) => `${f.retailer_id}|${f.anomaly_type}|${f.sku_name ?? ''}`)
+  );
+  const activeRows = await AnomalyFlag.find({ resolved: false })
+    .select('retailer_id anomaly_type sku_name')
+    .lean();
+  const staleIds = activeRows
+    .filter((r) => !validKeys.has(`${r.retailer_id}|${r.anomaly_type}|${r.sku_name ?? ''}`))
+    .map((r) => r._id);
+  let reconciledCount = 0;
+  if (staleIds.length > 0) {
+    const dr = await AnomalyFlag.deleteMany({ _id: { $in: staleIds } });
+    reconciledCount = dr.deletedCount ?? 0;
+    console.log(`[anomaly] reconciled: removed ${reconciledCount} stale active row(s)`);
   }
 
   console.log(

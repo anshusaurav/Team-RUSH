@@ -220,9 +220,11 @@ export async function getVelocityData(
   }
   deviation = Math.round(deviation * 100) / 100;
 
-  // Classify anomaly
+  // Classify anomaly. Tightened from `> 1.8` to `> 2.2 AND lastWeekActual ≥ 8`
+  // so we don't flag SKUs going 1→3 units (statistically meaningless on
+  // Poisson-noisy synthetic data).
   let anomalyType: VelocityData['anomaly_type'] = null;
-  if (deviation > 1.8) {
+  if (deviation > 2.2 && lastWeekActual >= 8) {
     anomalyType = 'brain_demand_spike';
   } else if (deviation < 0.4 || (daysToStockout !== null && daysToStockout < 7)) {
     anomalyType = 'brain_stockout_risk';

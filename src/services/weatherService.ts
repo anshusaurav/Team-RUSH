@@ -184,21 +184,22 @@ export async function getWeatherForDistrict(district: string): Promise<WeatherSu
  *   - rainBonus: heavy_rain_days × 3, capped at +6 — pre-rain urgency
  *   - ndviBonus: low solar irradiance proxy → crop stress signal, capped at +5
  *
- * Why NDVI: low irradiance (< 450 W/m² avg over the last ~10 days) means
- * the area's been under thick cloud cover, which combined with humid heat
- * accelerates fungal disease pressure and stresses standing crops — i.e.
- * input demand may spike soon. NASA POWER returns this for free, we just
- * weren't using it.
+ * NASA POWER's ALLSKY_SFC_SW_DWN actually returns MJ/m²/day (not W/m² as
+ * an earlier comment claimed). Tropical India typical values:
+ *   25-30  clear-sky summer
+ *   18-25  average sunny
+ *   12-18  overcast / hazy
+ *    8-12  heavy cloud / monsoon-like
+ * Low irradiance = sustained cloud cover = crop stress + fungal pressure.
  */
 export function weatherRiskScore(summary: WeatherSummary | null): number {
   if (!summary) return 0;
   const base = summary.pest_risk === 'high' ? 20 : summary.pest_risk === 'medium' ? 10 : 0;
   const rainBonus = Math.min(summary.heavy_rain_days * 3, 6);
-  // ndvi_proxy is W/m². Lower = more cloud / crop stress.
   const ndviBonus =
     summary.ndvi_proxy === null  ? 0 :
-    summary.ndvi_proxy < 350     ? 5 :
-    summary.ndvi_proxy < 450     ? 2 :
+    summary.ndvi_proxy < 12      ? 5 :   // heavy cloud
+    summary.ndvi_proxy < 18      ? 2 :   // overcast / hazy
                                    0;
   return Math.min(base + rainBonus + ndviBonus, 25);
 }
