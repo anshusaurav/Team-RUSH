@@ -14,11 +14,19 @@ export interface ScoreBreakdown {
   stock_out_count: number;
   low_stock_count: number;
   sales_velocity_30d: number;
+  /**
+   * Slope of recent sales: (last15 − prior15) / max(prior15, 1).
+   *  -0.30 = sales fell 30% versus the prior 15 days (urgent retention visit)
+   *  +0.30 = sales spiked 30%
+   *  ~0   = stable
+   * Null only when there's no POS history at all for this retailer.
+   */
+  sales_trend_slope: number | null;
   anomaly_count: number;
   outcome_boost: number;
   biological_urgency: number; // growers with an upcoming crop stage in this tehsil
   digital_intent: number;     // growers who clicked a WhatsApp campaign in this tehsil
-  weather_risk: number;       // 0–20 pts from pest-favorable forecast or heavy rain
+  weather_risk: number;       // 0–25 pts from pest forecast + NDVI / rain
 }
 
 export interface RetailerScore {
@@ -203,12 +211,41 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
 
   const inventoryMap = new Map(inventoryByRetailer.map((i: any) => [i._id, i]));
 
-  // Bulk fetch 30-day sales velocity per retailer
-  const salesVelocity = await POS.aggregate([
+  // Bulk fetch 30-day sales velocity per retailer, and the split-window
+  // slope (last-15-day vs prior-15-day) used to surface retailers whose
+  // sales trajectory is changing. A single aggregation produces both via
+  // $facet so we only hit POS once.
+  const fifteenDaysAgo = new Date(targetDate.getTime() - 15 * 86400000);
+  const salesAgg = await POS.aggregate([
     { $match: { retailer_id: { $in: retailerIds }, transaction_date: { $gte: thirtyDaysAgo } } },
-    { $group: { _id: '$retailer_id', total_units: { $sum: '$sku_qty' } } },
+    {
+      $group: {
+        _id: '$retailer_id',
+        total_units: { $sum: '$sku_qty' },
+        last15_units: {
+          $sum: {
+            $cond: [{ $gte: ['$transaction_date', fifteenDaysAgo] }, '$sku_qty', 0],
+          },
+        },
+        prior15_units: {
+          $sum: {
+            $cond: [{ $lt: ['$transaction_date', fifteenDaysAgo] }, '$sku_qty', 0],
+          },
+        },
+      },
+    },
   ]);
-  const salesMap = new Map(salesVelocity.map((s: any) => [s._id, s.total_units]));
+  const salesMap = new Map(salesAgg.map((s: any) => [s._id, s.total_units]));
+  // sales_trend_slope per retailer: (last15 − prior15) / max(prior15, 1)
+  const slopeMap = new Map<string, number | null>(
+    salesAgg.map((s: any) => {
+      const prior = s.prior15_units;
+      if (prior <= 0 && s.last15_units <= 0) return [s._id, null];
+      const slope = (s.last15_units - prior) / Math.max(prior, 1);
+      // Clamp to [-1, +2] so cold-starts (0 prior → very large positive) don't blow up
+      return [s._id, Math.max(-1, Math.min(2, slope))];
+    })
+  );
 
   // Score each retailer
   const scores: RetailerScore[] = retailers.map((retailer) => {
@@ -227,6 +264,7 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
     const stockOuts = inv.stock_outs;
     const lowStock = inv.low_stock;
     const salesVel = salesMap.get(retailer.retailer_id) || 0;
+    const slope = slopeMap.get(retailer.retailer_id) ?? null;
     const anomalyCount = anomalyMap.get(retailer.retailer_id) || 0;
     const outcomeBoost = outcomeMap.get(retailer.retailer_id) || 0;
     const bioUrgency = bioMap.get(retailer.tehsil) || 0;
@@ -240,15 +278,24 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
     const stockOutScore   = stockOuts * 15;                           // 15 pts per out-of-stock SKU
     const lowStockScore   = lowStock * 5;                             // 5 pts per low-stock SKU
     const salesScore      = Math.min(salesVel / 5, 20);              // max 20
+    // Sales trend slope — reward retailers whose trajectory is changing.
+    // Falling sales (<-10%) → up to +15 pts; spiking sales (>+30%) → +5 pts.
+    // Stable retailers get 0 — absolute velocity already captured them above.
+    const trendScore =
+      slope === null         ? 0 :
+      slope < -0.30          ? 15 :
+      slope < -0.10          ? 8  :
+      slope >  0.30          ? 5  :
+                                0;
     const anomalyScore    = anomalyCount * 20;                        // 20 pts per active alert
     const outcomeScore    = outcomeBoost * 10;                        // 10 pts per recent successful visit
     const proximityBoost  = proximityIndex >= 0 ? Math.max(0, 5 - proximityIndex) : 0; // max 5
     const bioScore        = Math.min(bioUrgency * 5, 25);            // max 25 — crop approaching critical stage
     const digitalScore    = Math.min(digitalCount * 3, 15);          // max 15 — growers with digital buying intent
-    // weatherScore is already capped at 20 by weatherRiskScore()
+    // weatherScore is already capped at 25 by weatherRiskScore()
 
     const score =
-      recencyScore + stockOutScore + lowStockScore + salesScore +
+      recencyScore + stockOutScore + lowStockScore + salesScore + trendScore +
       anomalyScore + outcomeScore + proximityBoost + bioScore + digitalScore + weatherScore;
 
     return {
@@ -265,6 +312,7 @@ export async function getVisitPlan(repId: string, date: string): Promise<Retaile
         stock_out_count:    stockOuts,
         low_stock_count:    lowStock,
         sales_velocity_30d: salesVel,
+        sales_trend_slope:  slope,
         anomaly_count:      anomalyCount,
         outcome_boost:      outcomeBoost,
         biological_urgency: bioUrgency,

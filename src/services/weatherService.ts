@@ -177,14 +177,30 @@ export async function getWeatherForDistrict(district: string): Promise<WeatherSu
 }
 
 /**
- * Compute a 0–20 weather risk score for the prioritization engine.
- * High pest risk + rain = higher score (rep should visit sooner).
+ * Compute a 0–25 weather risk score for the prioritization engine.
+ *
+ * Composition (additive, capped at 25):
+ *   - base from pest_risk (0 / 10 / 20)
+ *   - rainBonus: heavy_rain_days × 3, capped at +6 — pre-rain urgency
+ *   - ndviBonus: low solar irradiance proxy → crop stress signal, capped at +5
+ *
+ * Why NDVI: low irradiance (< 450 W/m² avg over the last ~10 days) means
+ * the area's been under thick cloud cover, which combined with humid heat
+ * accelerates fungal disease pressure and stresses standing crops — i.e.
+ * input demand may spike soon. NASA POWER returns this for free, we just
+ * weren't using it.
  */
 export function weatherRiskScore(summary: WeatherSummary | null): number {
   if (!summary) return 0;
   const base = summary.pest_risk === 'high' ? 20 : summary.pest_risk === 'medium' ? 10 : 0;
-  const rainBonus = Math.min(summary.heavy_rain_days * 3, 6); // extra urgency before rain arrives
-  return Math.min(base + rainBonus, 20);
+  const rainBonus = Math.min(summary.heavy_rain_days * 3, 6);
+  // ndvi_proxy is W/m². Lower = more cloud / crop stress.
+  const ndviBonus =
+    summary.ndvi_proxy === null  ? 0 :
+    summary.ndvi_proxy < 350     ? 5 :
+    summary.ndvi_proxy < 450     ? 2 :
+                                   0;
+  return Math.min(base + rainBonus + ndviBonus, 25);
 }
 
 /** Pre-warm the cache for all districts at startup / cron. */
