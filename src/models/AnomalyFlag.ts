@@ -41,5 +41,11 @@ const AnomalyFlagSchema = new Schema<IAnomalyFlag>({
 });
 
 AnomalyFlagSchema.index({ territory_id: 1, resolved: 1 });
+// Query-speed index on the natural key. Not unique on purpose — we don't want
+// a deploy migration to fail if Render/Atlas already contains duplicates from
+// older builds. Uniqueness is enforced softly: runAnomalyDetection() calls
+// dedupeAnomalyFlags() at the top of every run, and the detection path itself
+// uses bulkWrite upserts keyed on this same triple.
+AnomalyFlagSchema.index({ retailer_id: 1, anomaly_type: 1, sku_name: 1 });
 
 export default mongoose.model<IAnomalyFlag>('AnomalyFlag', AnomalyFlagSchema);

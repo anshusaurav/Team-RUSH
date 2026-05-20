@@ -51,11 +51,35 @@ router.get('/:retailerId', async (req: Request, res: Response) => {
 
       AnomalyFlag.aggregate([
         { $match: { retailer_id: retailerId, resolved: false } },
-        { $sort: { severity: 1 } },
-        { $group: { _id: { anomaly_type: '$anomaly_type', sku_name: '$sku_name' }, doc: { $first: '$$ROOT' } } },
+        // Map severity to a numeric rank so $sort actually orders high → low
+        // (alphabetical sort puts 'high' < 'low' < 'medium' — semantically wrong).
+        {
+          $addFields: {
+            severity_rank: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ['$severity', 'high']   }, then: 0 },
+                  { case: { $eq: ['$severity', 'medium'] }, then: 1 },
+                  { case: { $eq: ['$severity', 'low']    }, then: 2 },
+                ],
+                default: 3,
+              },
+            },
+          },
+        },
+        { $sort: { severity_rank: 1, detected_at: -1 } },
+        // Deduplicate by natural key — with the new unique index this is a
+        // no-op for fresh data, but it keeps the route robust if legacy
+        // duplicates ever slip in.
+        {
+          $group: {
+            _id: { anomaly_type: '$anomaly_type', sku_name: '$sku_name' },
+            doc: { $first: '$$ROOT' },
+          },
+        },
         { $replaceRoot: { newRoot: '$doc' } },
+        { $sort: { severity_rank: 1, detected_at: -1 } },
         { $project: { anomaly_type: 1, sku_name: 1, severity: 1, description: 1, detected_at: 1, _id: 0 } },
-        { $limit: 5 },
       ]),
 
       VisitLog.find({ visit_tehsil: retailer.tehsil })

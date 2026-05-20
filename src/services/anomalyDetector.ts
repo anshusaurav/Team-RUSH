@@ -236,7 +236,49 @@ async function detectWeatherAlerts() {
   return flags;
 }
 
+/**
+ * Soft-dedupe stragglers. Older builds inserted a fresh row every time the
+ * detector ran with no unique index, so a redeploy could quickly compound
+ * into 10×+ duplicates per (retailer, type, sku). This collapses each
+ * natural-key bucket to its single most-recent row.
+ *
+ * Idempotent. No-op once the upsert path has been live for one full cycle.
+ */
+async function dedupeAnomalyFlags(): Promise<number> {
+  const buckets = await AnomalyFlag.aggregate<{
+    _id: { retailer_id: string; anomaly_type: string; sku_name: string };
+    keep_id: any;
+    all_ids: any[];
+  }>([
+    { $sort: { detected_at: -1 } },
+    {
+      $group: {
+        _id: {
+          retailer_id: '$retailer_id',
+          anomaly_type: '$anomaly_type',
+          sku_name: '$sku_name',
+        },
+        keep_id: { $first: '$_id' },
+        all_ids: { $push: '$_id' },
+      },
+    },
+    { $match: { $expr: { $gt: [{ $size: '$all_ids' }, 1] } } },
+  ]);
+
+  if (!buckets.length) return 0;
+
+  const toDelete = buckets.flatMap((b) => b.all_ids.filter((id) => !id.equals(b.keep_id)));
+  if (!toDelete.length) return 0;
+
+  const r = await AnomalyFlag.deleteMany({ _id: { $in: toDelete } });
+  console.log(`[anomaly] dedupe: removed ${r.deletedCount} duplicate row(s) across ${buckets.length} bucket(s)`);
+  return r.deletedCount ?? 0;
+}
+
 export async function runAnomalyDetection(): Promise<{ inserted: number; cleared: number }> {
+  // First: collapse any duplicates left over from older builds.
+  await dedupeAnomalyFlags();
+
   // Clear old anomalies (older than 7 days)
   const clearResult = await AnomalyFlag.deleteMany({
     detected_at: { $lt: new Date(Date.now() - 7 * 86400000) },
@@ -255,8 +297,34 @@ export async function runAnomalyDetection(): Promise<{ inserted: number; cleared
 
   const allFlags = [...stockOutFlags, ...spikeFlags, ...gapFlags, ...intentFlags, ...weatherFlags, ...brainFlags];
 
+  // Upsert keyed on the natural key (retailer_id, anomaly_type, sku_name)
+  // so re-runs (server restart, cron) refresh the existing row instead of
+  // inserting a duplicate. detected_at bumps to "now" each detection.
   if (allFlags.length > 0) {
-    await AnomalyFlag.insertMany(allFlags, { ordered: false }).catch(() => {});
+    const ops = allFlags.map((f: any) => ({
+      updateOne: {
+        filter: {
+          retailer_id: f.retailer_id,
+          anomaly_type: f.anomaly_type,
+          sku_name: f.sku_name ?? '',
+        },
+        update: {
+          $set: {
+            territory_id: f.territory_id,
+            severity:     f.severity,
+            description:  f.description,
+            detected_at:  new Date(),
+          },
+          $setOnInsert: {
+            resolved: false,
+          },
+        },
+        upsert: true,
+      },
+    }));
+    await AnomalyFlag.bulkWrite(ops, { ordered: false }).catch((e) =>
+      console.warn('[anomaly] bulkWrite warning:', e?.message || e)
+    );
   }
 
   console.log(
