@@ -44,7 +44,15 @@ export default function RepsPage() {
   const [reps, setReps] = useState<Rep[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [stateFilter, setStateFilter] = useState<string>('all'); // 'all' or a state name
   const [leaderboard, setLeaderboard] = useState<Map<string, RepLeaderboardEntry>>(new Map());
+
+  // Full list of unique states (sorted), populated once reps load.
+  const allStates = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of reps) if (r.state) set.add(r.state);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [reps]);
 
   useEffect(() => {
     getReps().then(d => setReps(d.reps ?? [])).finally(() => setLoading(false));
@@ -63,10 +71,13 @@ export default function RepsPage() {
     router.push('/dashboard');
   };
 
-  // Filter + group by state
-  const { totalShown, byState } = useMemo(() => {
+  // Filter (state dropdown + text search) + group by state.
+  // When a specific state is selected, the per-state cap is dropped so the
+  // user can see every rep in that state — that's the point of filtering.
+  const { totalShown, totalRendered, byState } = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filtered = reps.filter(r => {
+      if (stateFilter !== 'all' && r.state !== stateFilter) return false;
       if (!q) return true;
       return (
         r.rep_id.toLowerCase().includes(q) ||
@@ -81,11 +92,13 @@ export default function RepsPage() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(r);
     }
+    const cap = stateFilter === 'all' ? 24 : Infinity; // no cap when state-filtered
     const groups = Array.from(map.entries())
-      .map(([state, reps]) => ({ state, reps: reps.slice(0, 24) /* cap per state */ }))
+      .map(([state, reps]) => ({ state, reps: cap === Infinity ? reps : reps.slice(0, cap) }))
       .sort((a, b) => a.state.localeCompare(b.state));
-    return { totalShown: filtered.length, byState: groups };
-  }, [reps, search]);
+    const rendered = groups.reduce((s, g) => s + g.reps.length, 0);
+    return { totalShown: filtered.length, totalRendered: rendered, byState: groups };
+  }, [reps, search, stateFilter]);
 
   return (
     <div className="page-shell space-y-5">
@@ -101,15 +114,34 @@ export default function RepsPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          placeholder={t('reps.searchPlaceholder')}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-sm shadow-sm focus:outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 transition-all"
-        />
+      {/* Search + state filter */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            placeholder={t('reps.searchPlaceholder')}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-sm shadow-sm focus:outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 transition-all"
+          />
+        </div>
+        <div className="relative sm:w-48">
+          <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <select
+            value={stateFilter}
+            onChange={e => setStateFilter(e.target.value)}
+            className="w-full appearance-none bg-white border border-gray-200 rounded-xl pl-9 pr-8 py-2.5 text-sm shadow-sm focus:outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 transition-all cursor-pointer"
+          >
+            <option value="all">{t('reps.stateFilterAll')}</option>
+            {allStates.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <ChevronRight
+            size={14}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none rotate-90"
+          />
+        </div>
       </div>
 
       {/* Loading */}
@@ -226,10 +258,10 @@ export default function RepsPage() {
         );
       })}
 
-      {/* Hint when capping per-state */}
-      {!loading && totalShown > byState.reduce((s, g) => s + g.reps.length, 0) && (
+      {/* Hint when the per-state cap is hiding reps (only in 'All states' mode) */}
+      {!loading && stateFilter === 'all' && totalShown > totalRendered && (
         <p className="text-xs text-center text-gray-400 mt-2">
-          {t('reps.showingHint', { total: totalShown })}
+          {t('reps.showingHint', { shown: totalRendered, total: totalShown })}
         </p>
       )}
     </div>
