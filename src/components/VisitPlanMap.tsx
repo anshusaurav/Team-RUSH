@@ -231,18 +231,19 @@ export default function VisitPlanMap({ plan, repId, date, repDistrict }: Props) 
         )}
       </div>
 
-      {/* Legend (bottom-left) */}
-      <div className="absolute bottom-2 left-2 bg-white/95 backdrop-blur-sm rounded-md shadow-md px-2 py-1.5 text-[10px] z-[400] flex items-center gap-2">
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-red-600 inline-block" />
+      {/* Legend (bottom-left) — explicit text color so it stays readable
+          regardless of any inherited color from the page wrapper. */}
+      <div className="absolute bottom-2 left-2 bg-white rounded-md shadow-md px-2.5 py-1.5 text-[11px] font-medium text-gray-800 z-[400] flex items-center gap-3 border border-gray-200">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block shrink-0" />
           {t('visitCard.priorityUrgent')}
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shrink-0" />
           {t('visitCard.priorityHigh')}
         </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-gray-500 inline-block" />
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-gray-500 inline-block shrink-0" />
           {t('visitCard.priorityNormal')}
         </span>
       </div>
