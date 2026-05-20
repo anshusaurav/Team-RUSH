@@ -1,8 +1,8 @@
 {
   "id": "/?source=pwa",
-  "name": "Syngenta Field Co-Pilot",
-  "short_name": "Field Co-Pilot",
-  "description": "AI-Guided Field Force Intelligence for Syngenta sales representatives",
+  "name": "Disha by Syngenta",
+  "short_name": "Disha",
+  "description": "Disha is an AI-guided field force intelligence app for Syngenta sales representatives across India.",
   "start_url": "/dashboard?source=pwa",
   "scope": "/",
   "display": "standalone",

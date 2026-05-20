@@ -1,5 +1,5 @@
 const en = {
-  brand: 'Field Co-Pilot',
+  brand: 'Disha',
   landing: {
     tagline: 'AI-Guided Field Force Intelligence',
     heroEyebrow: 'Built for Bharat',
@@ -15,7 +15,7 @@ const en = {
     whyStat2Label: 'farm size for most smallholders',
     whyStat3Value: 'Weekly',
     whyStat3Label: 'shift in pest, weather & demand signals',
-    capabilitiesTitle: 'Inside Field Co-Pilot',
+    capabilitiesTitle: 'Inside Disha',
     capabilitiesBlurb: 'A closer look at the four screens reps live in every day.',
     featureOpenLink: 'Open in app',
     cap1Title: 'Ranked daily plan',

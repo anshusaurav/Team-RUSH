@@ -30,13 +30,13 @@ const hind = Hind({
 });
 
 export const metadata: Metadata = {
-  title: "Syngenta Field Co-Pilot",
-  description: "AI-Guided Field Force Intelligence for Indian agriculture",
+  title: "Disha · Syngenta",
+  description: "Disha is an AI-guided field force intelligence app for Syngenta sales representatives across India.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Field Co-Pilot",
+    title: "Disha",
   },
 };
 

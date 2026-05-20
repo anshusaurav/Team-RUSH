@@ -1,7 +1,7 @@
 import type { Dict } from './en';
 
 const hi: Dict = {
-  brand: 'फील्ड को-पायलट',
+  brand: 'दिशा',
   landing: {
     tagline: 'AI-संचालित फील्ड फोर्स इंटेलिजेंस',
     heroEyebrow: 'भारत के लिए बना',
@@ -17,8 +17,8 @@ const hi: Dict = {
     whyStat2Label: 'अधिकांश छोटे किसानों का फार्म',
     whyStat3Value: 'साप्ताहिक',
     whyStat3Label: 'कीट, मौसम और माँग संकेतों में बदलाव',
-    capabilitiesTitle: 'फील्ड को-पायलट के अंदर',
-    capabilitiesBlurb: 'चार स्क्रीन जिनमें प्रतिनिधि हर दिन रहते हैं — करीब से देखें।',
+    capabilitiesTitle: 'दिशा के अंदर',
+    capabilitiesBlurb: 'चार स्क्रीन जिनमें प्रतिनिधि हर दिन रहते हैं, करीब से देखें।',
     featureOpenLink: 'ऐप में खोलें',
     cap1Title: 'रैंक्ड दैनिक योजना',
     cap1Body: 'नौ-कारक प्राथमिकता स्कोर — स्टॉक, बिक्री गति, अलर्ट, जैविक प्राथमिकता, डिजिटल रुचि और मौसम जोखिम सहित — हर कार्ड पर कारण दिखाई देता है।',
