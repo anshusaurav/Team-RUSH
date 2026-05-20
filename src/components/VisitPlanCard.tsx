@@ -49,11 +49,30 @@ function proximityKey(index: number): string {
 /** Mirror the server-side scoring formula so we can show factor contributions. */
 function computeFactors(sb: ScoreBreakdown, proximityIndex: number) {
   const days = sb.days_since_visit === -1 ? 999 : sb.days_since_visit;
+  // Sales-trend slope component — same buckets as the backend.
+  const slope = sb.sales_trend_slope ?? null;
+  const trendPts =
+    slope === null  ? 0 :
+    slope < -0.30   ? 15 :
+    slope < -0.10   ? 8  :
+    slope >  0.30   ? 5  :
+                       0;
+  const trendLabel =
+    slope === null  ? '' :
+    slope < -0.30   ? `Sales falling ${Math.round(-slope * 100)}%` :
+    slope < -0.10   ? `Sales dipping ${Math.round(-slope * 100)}%` :
+    slope >  0.30   ? `Sales spiking +${Math.round(slope * 100)}%` :
+                       '';
+  const trendColor = slope !== null && slope < 0
+    ? 'text-rose-700 bg-rose-100'
+    : 'text-indigo-700 bg-indigo-100';
+
   return [
     { key: 'recency',   pts: Math.min(days, 30) * 2,              label: days >= 30 ? 'Overdue'          : `${days}d gap`,     color: 'text-gray-600 bg-gray-100' },
     { key: 'stockOut',  pts: sb.stock_out_count * 15,             label: `${sb.stock_out_count} stock-out`, color: 'text-red-700 bg-red-100' },
     { key: 'lowStock',  pts: sb.low_stock_count * 5,              label: `${sb.low_stock_count} low-stock`, color: 'text-amber-700 bg-amber-100' },
     { key: 'sales',     pts: Math.min(sb.sales_velocity_30d / 5, 20), label: 'High velocity',              color: 'text-teal-700 bg-teal-100' },
+    { key: 'trend',     pts: trendPts,                            label: trendLabel,                       color: trendColor },
     { key: 'anomaly',   pts: sb.anomaly_count * 20,               label: `${sb.anomaly_count} alert${sb.anomaly_count !== 1 ? 's' : ''}`, color: 'text-red-700 bg-red-100' },
     { key: 'outcome',   pts: sb.outcome_boost * 10,               label: 'Past orders',                   color: 'text-green-700 bg-green-100' },
     { key: 'bio',       pts: Math.min((sb.biological_urgency ?? 0) * 5, 25), label: 'Crop stage',         color: 'text-emerald-700 bg-emerald-100' },
@@ -141,6 +160,7 @@ export default function VisitPlanCard({
                     f.key === 'digital' ? 'bg-blue-400' :
                     f.key === 'weather' ? 'bg-orange-400' :
                     f.key === 'recency' ? 'bg-gray-400' :
+                    f.key === 'trend' ? 'bg-rose-400' :
                     'bg-green-500';
                   return (
                     <div

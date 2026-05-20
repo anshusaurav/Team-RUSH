@@ -34,11 +34,16 @@ export interface ScoreBreakdown {
   stock_out_count: number;
   low_stock_count: number;
   sales_velocity_30d: number;
+  /**
+   * (last-15-day units − prior-15-day units) / max(prior15, 1).
+   * Negative = falling, positive = spiking. Null if no POS history.
+   */
+  sales_trend_slope?: number | null;
   anomaly_count: number;
   outcome_boost: number;
   biological_urgency: number; // growers with upcoming crop stage in this tehsil
   digital_intent: number;     // growers who clicked a WhatsApp campaign in this tehsil
-  weather_risk?: number;      // 0–20 pts from pest-favorable forecast or heavy rain
+  weather_risk?: number;      // 0–25 pts from pest forecast + NDVI / rain
 }
 
 export interface VisitPlanItem {
