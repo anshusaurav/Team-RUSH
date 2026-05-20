@@ -5,11 +5,11 @@
 **Goal:** end-to-end exploratory pass, file 5–8 real findings as GitHub issues using the `qa-finding` template, validate the ones that get fixed before cut-off.
 
 ## The deployed surface
-- Landing: https://frontend-pi-rose-30.vercel.app
-- Dashboard: https://frontend-pi-rose-30.vercel.app/dashboard
-- Alerts: https://frontend-pi-rose-30.vercel.app/anomalies
-- Reps: https://frontend-pi-rose-30.vercel.app/reps
-- A retailer detail: https://frontend-pi-rose-30.vercel.app/retailer/RTL_00001?repId=REP_0001
+- Landing: https://disha-ai-copilot.vercel.app
+- Dashboard: https://disha-ai-copilot.vercel.app/dashboard
+- Alerts: https://disha-ai-copilot.vercel.app/anomalies
+- Reps: https://disha-ai-copilot.vercel.app/reps
+- A retailer detail: https://disha-ai-copilot.vercel.app/retailer/RTL_00001?repId=REP_0001
 
 ## What to look for (test charter, not a script)
 

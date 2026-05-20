@@ -16,17 +16,26 @@ export default function Navbar() {
   const pathname = usePathname();
   const { t } = useLocale();
 
-  // Landing page (/) renders its own hero — the app navbar would compete with
-  // it. Keep just a minimal floating language picker so locale can still be
-  // toggled before the user clicks through to the app.
+  // Landing page (/) gets a minimal marketing-style top bar: brand on the
+  // left, language picker on the right. Lighter than the full app navbar so
+  // it doesn't compete with the hero, but still shows the Disha mark.
   const isLanding = pathname === '/';
   if (isLanding) {
     return (
-      <div className="absolute top-3 right-3 z-30 sm:top-5 sm:right-5">
-        <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-sm border border-gray-200 px-1 py-1">
-          <LanguagePicker />
+      <header className="absolute top-0 inset-x-0 z-30">
+        <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
+          <Link href="/" className="font-display flex items-center gap-2 text-gray-900 hover:opacity-80 transition-opacity">
+            <span className="w-7 h-7 rounded-md bg-green-700 flex items-center justify-center shadow-sm">
+              <Sprout size={15} className="text-white" />
+            </span>
+            <span className="font-bold text-lg tracking-tight">{t('brand')}</span>
+            <span className="hidden sm:inline text-xs text-gray-400 tracking-wider uppercase ml-1">by Syngenta</span>
+          </Link>
+          <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-sm border border-gray-200 px-1 py-1">
+            <LanguagePicker />
+          </div>
         </div>
-      </div>
+      </header>
     );
   }
 

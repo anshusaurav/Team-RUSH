@@ -7,7 +7,7 @@
 
 ## Pre-record checklist
 1. Warm the backend first — it sleeps on the free tier. Open https://syngenta-backend.onrender.com/health and wait for `{"status":"ok"}` before you start recording.
-2. Open https://frontend-pi-rose-30.vercel.app/ in incognito so localStorage is fresh.
+2. Open https://disha-ai-copilot.vercel.app/ in incognito so localStorage is fresh.
 3. Confirm `EN` is selected in the language picker.
 4. Have these URLs ready in separate tabs to switch quickly:
    - `/` (landing)
@@ -65,7 +65,7 @@ Track:          2 — AI-Guided Field Force Intelligence
 Submitted:      20 May 2026
 
 Live links
-  Frontend:     https://frontend-pi-rose-30.vercel.app
+  Frontend:     https://disha-ai-copilot.vercel.app
   Backend:      https://syngenta-backend.onrender.com
   Demo video:   <upload link>
 

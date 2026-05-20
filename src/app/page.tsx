@@ -28,7 +28,7 @@ export default function LandingPage() {
           style={{ background: 'radial-gradient(closest-side, rgba(22,163,74,0.20), transparent)' }}
         />
 
-        <div className="relative max-w-6xl mx-auto px-5 pt-16 pb-20 sm:pt-24 sm:pb-28">
+        <div className="relative max-w-6xl mx-auto px-5 pt-24 pb-20 sm:pt-28 sm:pb-28">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-12 items-center">
             {/* LEFT: eyebrow + headline + CTAs */}
             <div className="animate-fade-up">
