@@ -3,16 +3,13 @@
 import Link from 'next/link';
 import {
   Sprout,
-  MapPinned,
-  Sparkles,
-  AlertTriangle,
   Database,
   BrainCircuit,
   Smartphone,
   ArrowRight,
-  CheckCircle2,
 } from 'lucide-react';
 import { useLocale } from '@/lib/i18n/LocaleProvider';
+import LandingFeatures from '@/components/LandingFeatures';
 
 export default function LandingPage() {
   const { t } = useLocale();
@@ -90,42 +87,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── CAPABILITIES ────────────────────────────────────────────── */}
-      <section className="bg-stone-50">
-        <div className="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-          <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-              {t('landing.capabilitiesTitle')}
-            </h2>
-            <p className="mt-3 text-gray-600 leading-relaxed">
-              {t('landing.capabilitiesBlurb')}
-            </p>
-          </div>
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-5">
-            {[
-              { Icon: CheckCircle2, t: t('landing.cap1Title'), b: t('landing.cap1Body'), href: '/dashboard', accent: 'bg-green-100 text-green-700' },
-              { Icon: MapPinned,    t: t('landing.cap2Title'), b: t('landing.cap2Body'), href: '/dashboard', accent: 'bg-blue-100 text-blue-700' },
-              { Icon: Sparkles,     t: t('landing.cap3Title'), b: t('landing.cap3Body'), href: '/reps',      accent: 'bg-purple-100 text-purple-700' },
-              { Icon: AlertTriangle,t: t('landing.cap4Title'), b: t('landing.cap4Body'), href: '/anomalies', accent: 'bg-amber-100 text-amber-700' },
-            ].map(({ Icon, t: title, b, href, accent }, i) => (
-              <Link
-                key={i}
-                href={href}
-                className="group rounded-2xl bg-white border border-gray-200 p-6 hover:border-green-400 hover:shadow-md transition-all"
-              >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${accent}`}>
-                  <Icon size={20} />
-                </div>
-                <h3 className="mt-4 text-lg font-bold text-gray-900">{title}</h3>
-                <p className="mt-2 text-sm text-gray-600 leading-relaxed">{b}</p>
-                <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-green-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                  Explore <ArrowRight size={12} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ─── INSIDE FIELD CO-PILOT ─── alternating visual feature rows ── */}
+      <LandingFeatures />
 
       {/* ─── HOW IT WORKS ────────────────────────────────────────────── */}
       <section className="bg-white border-y border-gray-100">
