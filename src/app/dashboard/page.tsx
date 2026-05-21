@@ -213,7 +213,11 @@ function DashboardInner() {
         ) : view === 'map' ? (
           <VisitPlanMap plan={plan} repId={repId} date={today} repDistrict={rep?.district} />
         ) : (
-          <div className="space-y-5">
+          // flex+gap (not space-y-*) so vertical spacing works regardless of
+          // child display type — VisitPlanCard wraps in <Link> which renders
+          // as an inline <a> in Tailwind v4 / Next 16, and inline elements
+          // swallow vertical margins from space-y-*.
+          <div className="flex flex-col gap-5">
             {plan.map((item, i) => (
               <VisitPlanCard key={item.retailer_id} rank={i + 1} item={item} repId={repId} />
             ))}

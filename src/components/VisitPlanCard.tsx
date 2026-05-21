@@ -114,7 +114,7 @@ export default function VisitPlanCard({
   const topFactors = computeFactors(sb, item.proximity_index);
 
   return (
-    <Link href={`/retailer/${item.retailer_id}?repId=${repId}`}>
+    <Link href={`/retailer/${item.retailer_id}?repId=${repId}`} className="block">
       <div
         className={`relative z-0 hover:z-10 overflow-hidden bg-white border rounded-xl p-4 cursor-pointer shadow-sm hover:shadow-md transition-shadow ${priorityCardStyle[item.priority]}`}
       >
