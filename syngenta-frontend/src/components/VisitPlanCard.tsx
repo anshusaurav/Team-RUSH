@@ -1,0 +1,262 @@
+'use client';
+
+import Link from 'next/link';
+import { VisitPlanItem, ScoreBreakdown } from '@/lib/api';
+import { MapPin, Clock, Package, TrendingUp, AlertTriangle, Leaf, Smartphone } from 'lucide-react';
+import { useLocale } from '@/lib/i18n/LocaleProvider';
+
+// Subtle ring + soft top accent — no broken left ribbon, card stays white.
+const priorityCardStyle: Record<string, string> = {
+  urgent: 'border-gray-200 ring-1 ring-red-100',
+  high:   'border-gray-200 ring-1 ring-amber-100',
+  normal: 'border-gray-200',
+};
+
+// Thin top accent bar (1px); only rendered for urgent/high.
+const priorityAccent: Record<string, string> = {
+  urgent: 'bg-red-500',
+  high:   'bg-amber-400',
+  normal: '',
+};
+
+const priorityBadge: Record<string, string> = {
+  urgent: 'bg-red-600 text-white',
+  high:   'bg-amber-500 text-white',
+  normal: 'bg-gray-100 text-gray-600 border border-gray-200',
+};
+
+// Rank badge tint — communicates priority at a glance from the leading number.
+const rankStyle: Record<string, string> = {
+  urgent: 'bg-red-100 text-red-700 ring-1 ring-red-200',
+  high:   'bg-amber-100 text-amber-700 ring-1 ring-amber-200',
+  normal: 'bg-gray-100 text-gray-500 ring-1 ring-gray-200',
+};
+
+function proximityClass(index: number): string {
+  if (index === 0) return 'bg-green-100 text-green-700';
+  if (index <= 2) return 'bg-teal-50 text-teal-700';
+  if (index <= 5) return 'bg-gray-100 text-gray-500';
+  return 'bg-gray-100 text-gray-400';
+}
+
+function proximityKey(index: number): string {
+  if (index === 0) return 'visitCard.proximityHome';
+  if (index <= 2) return 'visitCard.proximityNearby';
+  if (index <= 5) return 'visitCard.proximityInRange';
+  return 'visitCard.proximityFar';
+}
+
+/** Mirror the server-side scoring formula so we can show factor contributions. */
+function computeFactors(sb: ScoreBreakdown, proximityIndex: number) {
+  const days = sb.days_since_visit === -1 ? 999 : sb.days_since_visit;
+  // Sales-trend slope component — same buckets as the backend.
+  const slope = sb.sales_trend_slope ?? null;
+  const trendPts =
+    slope === null  ? 0 :
+    slope < -0.30   ? 15 :
+    slope < -0.10   ? 8  :
+    slope >  0.30   ? 5  :
+                       0;
+  const trendLabel =
+    slope === null  ? '' :
+    slope < -0.30   ? `Sales falling ${Math.round(-slope * 100)}%` :
+    slope < -0.10   ? `Sales dipping ${Math.round(-slope * 100)}%` :
+    slope >  0.30   ? `Sales spiking +${Math.round(slope * 100)}%` :
+                       '';
+  const trendColor = slope !== null && slope < 0
+    ? 'text-rose-700 bg-rose-100'
+    : 'text-indigo-700 bg-indigo-100';
+
+  return [
+    { key: 'recency',   pts: Math.min(days, 30) * 2,              label: days >= 30 ? 'Overdue'          : `${days}d gap`,     color: 'text-gray-600 bg-gray-100' },
+    { key: 'stockOut',  pts: sb.stock_out_count * 15,             label: `${sb.stock_out_count} stock-out`, color: 'text-red-700 bg-red-100' },
+    { key: 'lowStock',  pts: sb.low_stock_count * 5,              label: `${sb.low_stock_count} low-stock`, color: 'text-amber-700 bg-amber-100' },
+    { key: 'sales',     pts: Math.min(sb.sales_velocity_30d / 5, 20), label: 'High velocity',              color: 'text-teal-700 bg-teal-100' },
+    { key: 'trend',     pts: trendPts,                            label: trendLabel,                       color: trendColor },
+    // anomaly_score is the backend-computed type-weighted sum (stock_out=25, visit_gap=8 etc).
+    // Falls back to count*15 if older backend doesn't return anomaly_score yet.
+    { key: 'anomaly',   pts: sb.anomaly_score ?? sb.anomaly_count * 15, label: `${sb.anomaly_count} alert${sb.anomaly_count !== 1 ? 's' : ''}`, color: 'text-red-700 bg-red-100' },
+    { key: 'outcome',   pts: sb.outcome_boost * 10,               label: 'Past orders',                   color: 'text-green-700 bg-green-100' },
+    { key: 'bio',       pts: Math.min((sb.biological_urgency ?? 0) * 5, 25), label: 'Crop stage',         color: 'text-emerald-700 bg-emerald-100' },
+    { key: 'digital',   pts: Math.min((sb.digital_intent ?? 0) * 3, 15),     label: 'WhatsApp intent',    color: 'text-blue-700 bg-blue-100' },
+    { key: 'weather',   pts: sb.weather_risk ?? 0,                label: 'Weather risk',                  color: 'text-orange-700 bg-orange-100' },
+    {
+      key: 'catchment',
+      pts: sb.catchment_gap ?? 0,
+      label: (sb.grower_density ?? 0) >= 50
+        ? `Underpenetrated · ${sb.grower_density} growers`
+        : `Catchment gap · ${sb.grower_density ?? 0} growers`,
+      color: 'text-fuchsia-700 bg-fuchsia-100',
+    },
+    { key: 'proximity', pts: proximityIndex >= 0 ? Math.max(0, 5 - proximityIndex) : 0, label: 'On-route', color: 'text-purple-700 bg-purple-100' },
+  ]
+    .filter(f => f.pts > 0)
+    .sort((a, b) => b.pts - a.pts)
+    .slice(0, 3); // top 3 drivers only — keep card compact
+}
+
+export default function VisitPlanCard({
+  rank, item, repId,
+}: {
+  rank: number; item: VisitPlanItem; repId: string;
+}) {
+  const { t } = useLocale();
+  const { score_breakdown: sb } = item;
+  const daysLabel = sb.days_since_visit === -1
+    ? t('visitCard.neverVisited')
+    : t('visitCard.daysAgo', { days: sb.days_since_visit });
+  const showProximity = item.proximity_index >= 0;
+  const proxClassName = showProximity ? proximityClass(item.proximity_index) : '';
+  const proxLabel = showProximity ? t(proximityKey(item.proximity_index)) : '';
+  const bioUrgency = sb.biological_urgency ?? 0;
+  const digitalIntent = sb.digital_intent ?? 0;
+
+  const topFactors = computeFactors(sb, item.proximity_index);
+
+  return (
+    <Link href={`/retailer/${item.retailer_id}?repId=${repId}`} className="block">
+      <div
+        className={`relative z-0 hover:z-10 overflow-hidden bg-white border rounded-xl p-4 cursor-pointer shadow-sm hover:shadow-md transition-shadow ${priorityCardStyle[item.priority]}`}
+      >
+        {/* Thin top accent bar (only for urgent/high) — sits flush with rounded corners. */}
+        {priorityAccent[item.priority] && (
+          <div className={`absolute inset-x-0 top-0 h-1 ${priorityAccent[item.priority]}`} />
+        )}
+
+        {/* Header row: rank chip + retailer ID + badges + score */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-3">
+            <span
+              className={`inline-flex items-center justify-center min-w-[2.25rem] h-9 px-2 rounded-lg font-bold text-sm leading-none shrink-0 ${rankStyle[item.priority]}`}
+            >
+              #{rank}
+            </span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-gray-800">{item.retailer_id}</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${priorityBadge[item.priority]}`}>
+                  {t(`visitCard.priority${item.priority.charAt(0).toUpperCase()}${item.priority.slice(1)}`)}
+                </span>
+                {showProximity && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${proxClassName}`}>
+                    {proxLabel}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                <MapPin size={11} /> {item.tehsil}, {item.district}
+              </div>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-lg font-bold text-green-700">{item.score}</div>
+            <div className="text-xs text-gray-400">{t('visitCard.score')}</div>
+          </div>
+        </div>
+
+        {/* Score explainability — visual factor bar + top-driver chips */}
+        {topFactors.length > 0 && (
+          <div className="mt-2.5 space-y-1.5">
+            {/* Stacked proportion bar */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold shrink-0">Why:</span>
+              <div className="flex-1 flex h-2 rounded-full overflow-hidden gap-px bg-gray-100">
+                {topFactors.map(f => {
+                  const pct = item.score > 0 ? (f.pts / item.score) * 100 : 0;
+                  const barColor =
+                    f.key === 'stockOut' || f.key === 'anomaly' ? 'bg-red-400' :
+                    f.key === 'lowStock' ? 'bg-amber-400' :
+                    f.key === 'bio' ? 'bg-emerald-500' :
+                    f.key === 'digital' ? 'bg-blue-400' :
+                    f.key === 'weather' ? 'bg-orange-400' :
+                    f.key === 'recency' ? 'bg-gray-400' :
+                    f.key === 'trend' ? 'bg-rose-400' :
+                    f.key === 'catchment' ? 'bg-fuchsia-400' :
+                    'bg-green-500';
+                  return (
+                    <div
+                      key={f.key}
+                      className={`${barColor} transition-all`}
+                      style={{ width: `${pct}%` }}
+                      title={`${f.label}: +${Math.round(f.pts)} pts`}
+                    />
+                  );
+                })}
+                {/* Remainder */}
+                <div className="flex-1 bg-gray-100" />
+              </div>
+            </div>
+            {/* Driver chips */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {topFactors.map(f => (
+                <span
+                  key={f.key}
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${f.color}`}
+                >
+                  {f.label} +{Math.round(f.pts)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Biological urgency + digital intent signals */}
+        {(bioUrgency > 0 || digitalIntent > 0) && (
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {bioUrgency > 0 && (
+              <span className="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                <Leaf size={10} />{' '}
+                {t(bioUrgency === 1 ? 'visitCard.growersAtStage' : 'visitCard.growersAtStagePlural', { count: bioUrgency })}
+              </span>
+            )}
+            {digitalIntent > 0 && (
+              <span className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
+                <Smartphone size={10} />{' '}
+                {t(digitalIntent === 1 ? 'visitCard.whatsappClick' : 'visitCard.whatsappClickPlural', { count: digitalIntent })}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Stats — labelled metric blocks. 2-col on mobile, 4-col on wide. */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+          <div className="bg-gray-50 rounded-md px-2 py-1.5">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              <Clock size={10} /> {t('visitCard.metricLastVisit')}
+            </div>
+            <div className="text-xs font-medium text-gray-800 mt-0.5">{daysLabel}</div>
+          </div>
+          <div className="bg-gray-50 rounded-md px-2 py-1.5">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              <Package size={10} className={sb.stock_out_count > 0 ? 'text-red-500' : ''} /> {t('visitCard.metricStock')}
+            </div>
+            <div className={`text-xs font-medium mt-0.5 ${sb.stock_out_count > 0 ? 'text-red-600' : 'text-gray-800'}`}>
+              {sb.stock_out_count > 0
+                ? t('visitCard.outOfStock', { count: sb.stock_out_count })
+                : t('visitCard.inStock')}
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-md px-2 py-1.5">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              <TrendingUp size={10} /> {t('visitCard.metricSales30d')}
+            </div>
+            <div className="text-xs font-medium text-gray-800 mt-0.5">
+              {t('visitCard.unitsShort', { n: sb.sales_velocity_30d })}
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-md px-2 py-1.5">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              <AlertTriangle size={10} className={sb.anomaly_count > 0 ? 'text-red-500' : ''} /> {t('visitCard.metricAlerts')}
+            </div>
+            <div className={`text-xs font-medium mt-0.5 ${sb.anomaly_count > 0 ? 'text-red-600' : 'text-gray-800'}`}>
+              {sb.anomaly_count > 0
+                ? t(sb.anomaly_count === 1 ? 'visitCard.alertsCount' : 'visitCard.alertsCountPlural', { count: sb.anomaly_count })
+                : t('visitCard.noAlerts')}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </Link>
+  );
+}
