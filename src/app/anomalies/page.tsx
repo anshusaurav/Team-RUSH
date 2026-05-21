@@ -134,7 +134,7 @@ export default function AnomaliesPage() {
           {t('anomalies.noAlerts')}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-4">
           {anomalies.map(a => (
             <div key={a._id} className={`border-l-4 rounded-lg p-3 ${severityStyle[a.severity]} flex items-start justify-between gap-3`}>
               <div className="flex-1 min-w-0">

@@ -213,7 +213,7 @@ function DashboardInner() {
         ) : view === 'map' ? (
           <VisitPlanMap plan={plan} repId={repId} date={today} repDistrict={rep?.district} />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {plan.map((item, i) => (
               <VisitPlanCard key={item.retailer_id} rank={i + 1} item={item} repId={repId} />
             ))}
