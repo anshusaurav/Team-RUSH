@@ -2,6 +2,8 @@
 
 > **Quickest path:** the app is already live. Skip to [Live Deployment](#live-deployment) to evaluate without any local setup.
 
+**Source code:** https://github.com/anshusaurav/RUSH (monorepo — frontend + backend + dataset)
+
 ---
 
 ## Live Deployment

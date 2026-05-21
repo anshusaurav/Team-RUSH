@@ -4,7 +4,7 @@
 **Status:** Deployed (MVP)  
 **Frontend:** https://disha-ai-copilot.vercel.app  
 **Backend:** https://syngenta-backend.onrender.com  
-**Repos:** [syngenta-backend](https://github.com/anshusaurav/syngenta-backend) · [syngenta-frontend](https://github.com/anshusaurav/syngenta-frontend)
+**Monorepo:** [anshusaurav/RUSH](https://github.com/anshusaurav/RUSH) (frontend + backend + dataset, full history via git subtree)
 
 ---
 
